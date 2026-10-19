@@ -29,7 +29,14 @@ private:
      * @param element
      * @return
      */
-    virtual CStatus addElement(GElementPtr element);
+    CStatus addElement(GElementPtr element);
+
+    /**
+     * 在添加element的时候，附加选项
+     * @param element
+     * @return
+     */
+    virtual CStatus addElementEx(GElementPtr element);
 
     CStatus addManagers(GParamManagerPtr paramManager,
                         GEventManagerPtr eventManager,
@@ -51,7 +58,7 @@ private:
      * @param oss
      * @return
      */
-    CVoid dumpGroupLabelEnd(std::ostream& oss);
+    CVoid dumpGroupLabelEnd(std::ostream& oss) const;
 
     /**
      * 判断两个element，是否相互独立
@@ -62,25 +69,18 @@ private:
      */
     virtual CBool isSeparate(GElementCPtr a, GElementCPtr b) const;
 
-private:
-    GElementPtrArr group_elements_arr_;    // 存放 element的数组
-
     friend class GPipeline;
     friend class GCluster;
     friend class GRegion;
     friend class GCondition;
     friend class GMutable;
+    friend class GElementRepository;
+    friend class GStorage;
     template<GMultiConditionType> friend class GMultiCondition;
-    template<CInt> friend class GSome;
+    friend class GSome;
 
-protected:
-    /**
-     * 插入多个 elements 信息
-     * @param elements
-     * @return
-     * @notice 主要为了适配python接口，不建议cpp用户直接使用
-     */
-    CStatus __addElements_4py(const GElementPtrArr& elements);
+CGRAPH_INTERNAL_ACCESS:
+    CStatus __addGElements_4expose(const GElementPtrArr& elements);
 };
 
 using GGroupPtr = GGroup *;

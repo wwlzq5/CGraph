@@ -15,7 +15,7 @@ void test_performance_04() {
 
     const int layer = 8;
     const int nodePerLayer = 8;
-    const int runTimes = 100000;
+    const int runTimes = 300000;
 
     UThreadPoolConfig config;
     config.default_thread_size_ = nodePerLayer;
@@ -23,6 +23,8 @@ void test_performance_04() {
     config.max_task_steal_range_ = nodePerLayer - 1;
     config.primary_thread_busy_epoch_ = 500;
     config.primary_thread_empty_interval_ = 0;
+    config.deliver_running_primary_thread_enable_ = true;
+    config.pipeline_wait_busy_epoch_ = 100;
     pipeline->setUniqueThreadPoolConfig(config);
 
     // 实现一个全连接

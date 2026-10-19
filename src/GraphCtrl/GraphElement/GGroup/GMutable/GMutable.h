@@ -40,13 +40,16 @@ private:
      * 将数据进行恢复
      * @return
      */
-    CVoid setup();
+    CVoid setup() const;
+
+    GElementPtr setThreadPoolEx(UThreadPoolPtr ptr) final;
 
 private:
     GElementManagerPtr manager_ = nullptr;
 
     friend class GPipeline;
     friend class CAllocator;
+    friend class GStorageFactory;
 };
 
 using GMutablePtr = GMutable *;

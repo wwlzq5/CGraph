@@ -18,6 +18,7 @@
 
 #include "GPipelineObject.h"
 #include "_GSchedule/GScheduleInclude.h"
+#include "_GStroage/GStorageInclude.h"
 #include "../GraphElement/GElementInclude.h"
 #include "../GraphDaemon/GDaemonInclude.h"
 #include "../GraphEvent/GEventInclude.h"
@@ -63,17 +64,17 @@ public:
      */
     CStatus cancel();
 
-     /**
-      * 暂停当前pipeline的执行，多用于异步执行流程中
-      * @return
-      */
-     CStatus yield();
+    /**
+     * 暂停当前pipeline的执行，多用于异步执行流程中
+     * @return
+     */
+    CStatus suspend();
 
-     /**
-      * 恢复当前pipeline的执行，多用于异步执行流程中
-      * @return
-      */
-     CStatus resume();
+    /**
+     * 恢复当前pipeline的执行，多用于异步执行流程中
+     * @return
+     */
+    CStatus resume();
 
     /**
      * 生成图可视化 graphviz 信息
@@ -81,7 +82,7 @@ public:
      * @return
      * @notice 将输出的内容，复制到 https://dreampuf.github.io/GraphvizOnline/ 中查看效果
     */
-    CStatus dump(std::ostream& oss = std::cout);
+    CStatus dump(std::ostream& oss = std::cout) const;
 
     /**
      * 查看性能分析
@@ -108,7 +109,7 @@ public:
 
     /**
      * 根据传入的信息，创建node节点
-     * @tparam T
+     * @tparam TNode
      * @tparam Args
      * @param name
      * @param loop
@@ -125,7 +126,7 @@ public:
 
     /**
      * 根据传入的信息，创建Group信息
-     * @tparam T
+     * @tparam TGroup
      * @param elements
      * @param depends
      * @param name
@@ -135,9 +136,9 @@ public:
     template<typename TGroup,
             c_enable_if_t<std::is_base_of<GGroup, TGroup>::value, int> = 0>
     TGroup* createGGroup(const GElementPtrArr &elements,
-                    const GElementPtrSet &depends = std::initializer_list<GElementPtr>(),
-                    const std::string &name = CGRAPH_EMPTY,
-                    CSize loop = CGRAPH_DEFAULT_LOOP_TIMES);
+                         const GElementPtrSet &depends = std::initializer_list<GElementPtr>(),
+                         const std::string &name = CGRAPH_EMPTY,
+                         CSize loop = CGRAPH_DEFAULT_LOOP_TIMES);
 
     /**
      * 在图中注册一个 GElement信息
@@ -163,6 +164,7 @@ public:
      * @tparam Args
      * @param elementRef
      * @param depends
+     * @param args
      * @return
      */
     template<typename TNode, typename ...Args,
@@ -173,7 +175,7 @@ public:
 
     /**
      * 注册一个 node
-     * @tparam T
+     * @tparam TNode
      * @param depends
      * @param name
      * @param loop
@@ -299,7 +301,7 @@ public:
 
     /**
      * 添加模板类型守护
-     * @tparam TAspect
+     * @tparam TDaemon
      * @tparam Args
      * @param ms
      * @param args
@@ -363,13 +365,13 @@ public:
      * @return
      * @notice 暂时仅支持dag中所有内容均为 node的情况下计算。返回的值，是理论最大线程数，不是最优值
      */
-    CSize getMaxPara();
+    CSize getMaxPara() const;
 
     /**
      * 针对图结构，做多余边剪裁
      * @return 返回值表示裁剪了多少条信息
      */
-    CSize trim();
+    CSize trim() const;
 
     /**
      * 将符合串行执行条件的pipeline，设定为串行执行的模式。可以大幅度提升运行性能。
@@ -394,6 +396,20 @@ public:
     CBool checkSeparate(GElementPtr fst, GElementPtr snd) const;
 
     /**
+     * 存储当前 pipeline 信息到本地
+     * @param path
+     * @return
+     */
+    CStatus save(const std::string& path);
+
+    /**
+     * 从本地文件中加载 pipeline 信息
+     * @param path
+     * @return
+     */
+    CStatus load(const std::string& path);
+
+    /**
      * 注册GParam 交互类集合
      * @return
      */
@@ -402,9 +418,6 @@ public:
 protected:
     explicit GPipeline();
     ~GPipeline() override;
-
-    CStatus __interRegister_4py(GElementPtr element, const GElementPtrSet &depends,
-                                const std::string &name, CSize loop);
 
 private:
     /**
@@ -440,6 +453,16 @@ private:
     friend class GPipelineFactory;
     friend class CAllocator;
     friend class GPerf;
+    friend class GStorage;
+
+CGRAPH_INTERNAL_ACCESS:
+    CStatus __registerGElement_4expose(GElementPtr element, const GElementPtrSet &depends,
+                                   const std::string &name, CSize loop);
+    GPipeline* __addGEvent_4expose(GEventPtr event, const std::string& key);
+    GPipeline* __addGDaemon_4expose(GDaemonPtr daemon, CMSec ms);
+    GPipeline* __addGStage_4expose(GStagePtr stage, const std::string& key, CInt threshold);
+    std::string __dump_4expose();
+    std::string __perf_4expose();
 };
 
 using GPipelinePtr = GPipeline *;

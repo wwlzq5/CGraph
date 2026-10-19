@@ -7,7 +7,7 @@
 ***************************/
 
 #include "GElementRepository.h"
-#include "GNode/GNodeInclude.h"
+#include "GGroup/GGroupInclude.h"
 
 CGRAPH_NAMESPACE_BEGIN
 
@@ -25,7 +25,7 @@ CBool GElementRepository::find(GElementPtr ptr) const {
 
 GElementRepositoryPtr GElementRepository::setThreadPool(UThreadPoolPtr ptr) {
     CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(ptr)
-    for (auto& cur : this->elements_) {
+    for (auto* cur : this->elements_) {
         cur->setThreadPool(ptr);
     }
     return this;
@@ -40,9 +40,9 @@ CStatus GElementRepository::setup() {
 }
 
 
-CStatus GElementRepository::reset() {
+CStatus GElementRepository::reset() const {
     CGRAPH_FUNCTION_BEGIN
-    for (auto& cur : async_elements_) {
+    for (auto* cur : async_elements_) {
         if (GElementTimeoutStrategy::HOLD_BY_PIPELINE == cur->timeout_strategy_) {
             // 强烈建议，在这里等待执行完成
             status += cur->getAsyncResult();
@@ -60,44 +60,69 @@ CStatus GElementRepository::reset() {
 
 CStatus GElementRepository::pushAllState(const GElementState& state) {
     CGRAPH_FUNCTION_BEGIN
-    if (cur_state_ == state) {
+    if (cur_state_.load(std::memory_order_acquire) == state) {
         return status;    // 避免重复赋值
     }
 
     for (auto& cur : elements_) {
         cur->cur_state_.store(state, std::memory_order_release);
-        if (GElementState::YIELD != state) {
-            // 目前仅非yield状态，需要切换的。如果一直处于 yield状态，是不需要被通知的
-            cur->yield_cv_.notify_one();
+        if (GElementState::SUSPEND != state) {
+            // 目前仅非 suspend 状态，需要切换的。如果一直处于 suspend 状态，是不需要被通知的
+            cur->suspend_locker_.cv_.notify_one();
         }
     }
-    cur_state_ = state;    // 记录当前的状态信息
+    cur_state_.store(state, std::memory_order_release);    // 记录当前的状态信息
     CGRAPH_FUNCTION_END
+}
+
+
+CVoid GElementRepository::fetchAll(GElementManagerCPtr em) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(em)
+    for (auto* cur : em->manager_elements_) {
+        /**
+         * 从 pipeline 的 element manager 中，逐层添加查询
+         * 查询到如果pipeline中，存在没有注册到 repo 中element，则写入 repo中
+         * 主要针对 python 注册场景中 直接创建 element 放入group 的场景
+         */
+        fetch(cur);
+    }
+}
+
+
+CVoid GElementRepository::fetch(GElementPtr element) {
+    elements_.insert(element);
+    if (element->isGGroup()) {
+        const auto* group = dynamic_cast<GGroupPtr>(element);
+        CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(group)
+        for (auto* cur : group->children_) {
+            fetch(cur);
+        }
+    }
 }
 
 
 CBool GElementRepository::isCancelState() const {
     /**
      * 因为每次执行的时候，都需要判断一下这个状态是否为 cancel
-     * 且理论上不会出现多线程问题
-     * 故这一层的 cur_state_ 就不设置为atomic类型的了
+     * 外部线程可能通过 pipeline->cancel() 修改状态，故这里通过 atomic 读取
      */
-    return GElementState::CANCEL == cur_state_;
+    return GElementState::CANCEL == cur_state_.load(std::memory_order_acquire);
 }
 
 
 CStatus GElementRepository::init() {
     CGRAPH_FUNCTION_BEGIN
     async_elements_.clear();    // 每次记得清空这里。因为每次init之后，都可能不一样
-    for (auto& element : elements_) {
+    for (auto* element : elements_) {
         /**
          * 1. 查验element是否为空
          * 2. 查验配置信息是否正确
          * 3. 记录异步节点的信息
          */
-        CGRAPH_ASSERT_NOT_NULL(element)
+        CGRAPH_ASSERT_NOT_NULL(element, element->thread_pool_)
         status = element->checkSuitable();
         CGRAPH_FUNCTION_CHECK_STATUS
+        element->updateAspectInfo();
 
         if (element->isAsync()) {
             async_elements_.emplace(element);
@@ -130,7 +155,7 @@ CStatus GElementRepository::run() {
 
 GElementRepository::~GElementRepository() {
     // 删除所有内部的element信息
-    for (GElementPtr element : elements_) {
+    for (const auto* element : elements_) {
         CGRAPH_DELETE_PTR(element)
     }
 }

@@ -1,26 +1,25 @@
 <p align="left">
-  <a href="https://github.com/ChunelFeng/CGraph"><img src="https://badgen.net/badge/langs/C++/cyan?list=1" alt="languages"></a>
+  <a href="https://github.com/ChunelFeng/CGraph"><img src="https://badgen.net/badge/langs/C++,Python/cyan?list=1" alt="languages"></a>
   <a href="https://github.com/ChunelFeng/CGraph"><img src="https://badgen.net/badge/os/MacOS,Linux,Windows/cyan?list=1" alt="os"></a>
   <a href="https://github.com/ChunelFeng/CGraph/stargazers"><img src="https://badgen.net/github/stars/ChunelFeng/CGraph?color=cyan" alt="stars"></a>
   <a href="https://github.com/ChunelFeng/CGraph/network/members"><img src="https://badgen.net/github/forks/ChunelFeng/CGraph?color=cyan" alt="forks"></a>
+  <a href="https://badge.fury.io/py/pycgraph"><img src="https://badge.fury.io/py/pycgraph.svg" alt="pypi"></a>
+  <a href="https://pepy.tech/projects/pycgraph"><img src="https://static.pepy.tech/personalized-badge/pycgraph?period=total&units=INTERNATIONAL_SYSTEM&left_color=GRAY&right_color=GREEN&left_text=pypi+downloads" alt="PyPI Downloads"></a>
   <a href="https://www.codefactor.io/repository/github/chunelfeng/cgraph/overview/main"><img src="https://www.codefactor.io/repository/github/chunelfeng/cgraph/badge/main" alt="CodeFactor" /></a>
 </p>
 
 [![awesome-cpp](https://badgen.net/badge/icon/awesome-cpp/purple?icon=awesome&label&color)](https://github.com/fffaraz/awesome-cpp)
 [![HelloGithub](https://badgen.net/badge/icon/HelloGithub/purple?icon=awesome&label&color)](https://github.com/521xueweihan/HelloGitHub/blob/master/content/HelloGitHub70.md)
-[![GitHub-Chinese-Top-Charts](https://badgen.net/badge/icon/GitHub-Chinese-Top-Charts/purple?icon=awesome&label&color)](https://github.com/GrowingGit/GitHub-Chinese-Top-Charts/blob/master/content/charts/overall/software/CPP.md)
 
-中文 | [English Readme](README_en.md)
+中文 | [English Readme](README_en.md) | [deepwiki](https://deepwiki.com/ChunelFeng/CGraph)
 
-<h1 align="center">
-  CGraph 说明文档
-</h1>
+<h1 align="center"> CGraph 说明文档 </h1>
 
 <img align="right" src="https://github.com/ChunelFeng/CGraph/blob/main/doc/image/CGraph%20Author.jpg" width="256px">
 
 ><b>CGraph</b> is a cross-platform <b>D</b>irected <b>A</b>cyclic <b>G</b>raph framework based on pure C++ without any 3rd-party dependencies.</br></br>
->You, with it, can <b>build your own operators simply, and describe any running schedules</b> as you need, such as dependence, parallelling, aggregation and so on. Some useful tools and plugins are also provide to improve your project.</br></br>
->Tutorials and contact information are show as follows. Please <b>get in touch with us for free</b> if you need more about this repository.
+>You, with it, can <b>build your own operators simply, and describe any running schedules</b> as you need, such as dependence, parallelling, aggregation, conditional and so on. <b>Python APIs</b> are also supported to build your pipeline.</br></br>
+>Tutorials and contact information are shown as follows. Please <b>get in touch with us for free</b> if you need more about this repository.
 
 ## 一. 简介
 
@@ -28,12 +27,10 @@
 
 使用者只需继承`GNode`(节点)类，实现子类的`run()`方法，并根据需要设定依赖关系，即可实现任务的图化执行或流水线执行。还可以通过设定各种包含多节点信息的`GGroup`(组)，自行控制图的条件判断、循环和并发执行逻辑。
 
-项目提供了丰富的`Param`(参数)类型，用于不同应用场景下的数据互通。此外，还可以通过添加`GAspect`(切面)的方式，实现以上各种元素功能的横向扩展；通过引入`GAdapter`(适配器)对单个节点功能进行加强；或者通过添加`GEvent`(信号)，丰富和优化执行逻辑。
-
 ![CGraph Skeleton](https://github.com/ChunelFeng/CGraph/blob/main/doc/image/CGraph%20Skeleton.jpg)
 <br>
 
-本工程使用纯C++11标准库编写，无任何第三方依赖。兼容`MacOS`、`Linux`、`Windows`和`Android`系统，支持通过 `CLion`、`VSCode`、`Xcode`、`Visual Studio`、`Code::Blocks`、`Qt Creator`等多款IDE进行本地编译和二次开发，具体编译方式请参考 [CGraph 编译说明](https://github.com/ChunelFeng/CGraph/blob/main/COMPILE.md ) <br>
+本工程使用纯C++11标准库编写，无任何第三方依赖，兼容`MacOS`、`Linux`、`Windows`和`Android`系统。支持本地编译和二次开发，并且提供`Python`版本：`pycgraph`。编译和安装方法，请参考 [CGraph 编译说明](https://github.com/ChunelFeng/CGraph/blob/main/COMPILE.md ) <br>
 
 详细功能介绍和用法，请参考 [一面之猿网](http://www.chunel.cn/) 中的文章内容。相关视频在B站持续更新中，欢迎观看和交流：<br>
 * [【B站视频】CGraph 入门篇](https://www.bilibili.com/video/BV1mk4y1v7XJ) <br>
@@ -43,15 +40,20 @@
   * 适合想要全面了解功能和快速上手使用CGraph的童鞋
   * 适合对多线程编程感兴趣的童鞋
 * [【B站视频】CGraph 应用篇](https://www.bilibili.com/video/BV1B84y1D7Hs) <br>
-* [【B站视频】CGraph 分享篇](https://www.bilibili.com/video/BV1dh4y1i78u) <br>
+* [【B站视频】CGraph 分享篇](https://www.bilibili.com/video/BV1ofLdz5EzX) <br>
 
-## 二. 使用Demo
+----
 
-#### MyNode.h
+## 二. 入门Demo
+<details open>
+<summary><b>C++ 版本</b></summary>
+
 ```cpp
 #include "CGraph.h"
 
-class MyNode1 : public CGraph::GNode {
+using namespace CGraph;
+
+class MyNode1 : public GNode {
 public:
     CStatus run() override {
         printf("[%s], sleep for 1 second ...\n", this->getName().c_str());
@@ -60,7 +62,7 @@ public:
     }
 };
 
-class MyNode2 : public CGraph::GNode {
+class MyNode2 : public GNode {
 public:
     CStatus run() override {
         printf("[%s], sleep for 2 second ...\n", this->getName().c_str());
@@ -68,13 +70,7 @@ public:
         return CStatus();
     }
 };
-```
 
-#### main.cpp
-```cpp
-#include "MyNode.h"
-
-using namespace CGraph;
 
 int main() {
     /* 创建一个流水线，用于设定和执行流图信息 */
@@ -97,9 +93,62 @@ int main() {
 }
 ```
 
+</details>
+
 ![CGraph Demo](https://github.com/ChunelFeng/CGraph/blob/main/doc/image/CGraph%20Demo.jpg)
 <br>
 如上图所示，图结构执行的时候，首先执行`a`节点。`a`节点执行完毕后，并行执行`b`和`c`节点。`b`和`c`节点全部执行完毕后，再执行`d`节点。
+
+<details>
+<summary><b>Python 版本</b></summary>
+
+```python
+# pip install pycgraph
+
+import time
+from datetime import datetime
+
+from pycgraph import GNode, GPipeline, CStatus
+
+
+class MyNode1(GNode):
+    def run(self):
+        print("[{0}] {1}, sleep for 1 second ... ".format(datetime.now(), self.getName()))
+        time.sleep(1)
+        return CStatus()
+
+class MyNode2(GNode):
+    def run(self):
+        print("[{0}] {1}, sleep for 2 second ... ".format(datetime.now(), self.getName()))
+        time.sleep(2)
+        return CStatus()
+
+
+if __name__ == '__main__':
+    pipeline = GPipeline()
+    a, b, c, d = MyNode1(), MyNode2(), MyNode1(), MyNode2()
+
+    pipeline.registerGElement(a, set(), "nodeA")
+    pipeline.registerGElement(b, {a}, "nodeB")
+    pipeline.registerGElement(c, {a}, "nodeC")
+    pipeline.registerGElement(d, {b, c}, "nodeD")
+
+    pipeline.process()
+```
+
+</details>
+
+<details>
+<summary><b>其他版本</b></summary>
+
+* [CsCGraph](https://github.com/ChunelFeng/CsCGraph) : A CSharp native, CGraph-API-liked DAG project
+* [JaCGraph](https://github.com/ChunelFeng/JaCGraph) : A Java native, CGraph-API-liked DAG project
+* [GoCGraph](https://github.com/AsunaU2/GoCGraph) : A Go native, CGraph-API-liked DAG project
+* [CGraph-lite](https://github.com/ChunelFeng/CGraph-lite) : A one-header-only, CGraph-API-liked DAG project, lite version by C++
+
+</details>
+
+----
 
 ## 三. 推荐阅读
 
@@ -128,30 +177,39 @@ int main() {
 * [炸裂！CGraph性能全面超越taskflow之后，作者却说他更想...](http://www.chunel.cn/archives/cgraph-compare-taskflow-v1)
 * [以图优图：CGraph中计算dag最大并发度思路总结](http://www.chunel.cn/archives/cgraph-max-para-size)
 * [一文带你了解练习时长两年半的CGraph](http://www.chunel.cn/archives/cgraph-kunanniversary-introduce)
-* [CGraph作者想知道，您是否需要一款eDAG调度框架](http://www.chunel.cn/archives/cgraph-extended-dag)  
+* [CGraph作者想知道，您是否需要一款eDAG调度框架](http://www.chunel.cn/archives/cgraph-extended-dag)
 * [降边增效：CGraph中冗余边剪裁思路总结](http://www.chunel.cn/archives/cgraph-remove-redundancy-link)
-<br>
+* [最新码坛爽文：重生之我在国外写CGraph(python版本)](http://www.chunel.cn/archives/cgraph-pycgraph-v1)
+* [做之前不敢想的 CGraph](http://www.chunel.cn/archives/cgraph-unbelievable-2025)
+  <br>
+
+----
 
 ## 四. 关联项目
 
 * [GraphANNS](https://github.com/whenever5225/GraphANNS) : Graph-based Approximate Nearest Neighbor Search Working off CGraph
 * [CThreadPool](https://github.com/ChunelFeng/CThreadPool) : 一个简单好用、功能强大、性能优异、跨平台的C++线程池
-* [CGraph-lite](https://github.com/ChunelFeng/CGraph-lite) : head-only, simplest CGraph, with DAG executor and param translate function
+* [PyCGraph-example](https://github.com/ChunelFeng/PyCGraph-example) : A useful list of how cool to use PyCGraph
 * [awesome-cpp](https://github.com/fffaraz/awesome-cpp) : A curated list of awesome C++ (or C) frameworks, libraries, resources, and shiny things. Inspired by awesome-... stuff.
 * [awesome-workflow-engines](https://github.com/meirwah/awesome-workflow-engines) : A curated list of awesome open source workflow engines
 * [taskflow](https://github.com/taskflow/taskflow) : A General-purpose Parallel and Heterogeneous Task Programming System
   * [【B站视频】CGraph 和 taskflow 性能对比实测](https://www.bilibili.com/video/BV1gwWAekEAy/?spm_id_from=333.337.search-card.all.click&vd_source=2c7baed805c6cb33d630d5d4546cf0be) <br>
 * [torchpipe](https://github.com/torchpipe/torchpipe) : Serving Inside Pytorch
   * [【B站视频】开源项目torchpipe - ai引擎在线高并发经验和实战](https://www.bilibili.com/video/BV1Zm411X7k1/)
-* [nndeploy](https://github.com/DeployAI/nndeploy) : nndeploy是一款模型端到端部署框架。以多端推理以及基于有向无环图模型部署为内核，致力为用户提供跨平台、简单易用、高性能的模型部署体验。
-  * [【B站视频】nndeploy--AI模型端到端部署框架(1)](https://www.bilibili.com/video/BV1VA4m1A7Bk)
-  * [【B站视频】nndeploy--AI模型端到端部署框架(2)](https://www.bilibili.com/video/BV1PK421v775)
+* [nndeploy](https://github.com/DeployAI/nndeploy) : Easy-to-use, high-performance, multi-platform inference deployment framework
+  * [【B站视频合集】【nndeploy】AI推理框架最全教程](https://space.bilibili.com/435543077/lists/5565358?type=season)
 * [KuiperInfer](https://github.com/zjhellofss/KuiperInfer) : 带你从零实现一个高性能的深度学习推理库，支持大模型 llama2 、Unet、Yolov5、Resnet等模型的推理。Implement a high-performance deep learning inference library step by step
   * [【B站视频】KuiperInfer推理框架 - 一个面向教学的推理框架](https://www.bilibili.com/video/BV1t2421K7HN)
 * [OGraph](https://github.com/symphony09/ograph) : A simple way to build a pipeline with Go.
   * [【B站视频】听阿里云大佬分享：OGraph——基于Go的流图调度二三事](https://www.bilibili.com/video/BV19RHce6Evo)
+* [incubator-hugegraph-ai](https://github.com/apache/incubator-hugegraph-ai) : The integration of HugeGraph with AI/LLM & GraphRAG
+  * [Agentic GraphRAG：模块化架构实践](https://hugegraph.apache.org/cn/blog/2025/10/29/agentic-graphrag/)
+* [pybind11](https://github.com/pybind/pybind11) : Seamless operability between C++11 and Python
+  * 本项目Python接口绑定功能，使用pybind11实现
+  * [【B站视频】pybind11落地实战——PyCGraph是怎样练成的](https://www.bilibili.com/video/BV1ofLdz5EzX) | [飞书文档链接](https://ilyryn6yei.feishu.cn/docx/YDfHdU9mfoTlnqxaTkscRob6nGe)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ChunelFeng/CGraph&type=Date)](https://star-history.com/#ChunelFeng/CGraph&Date)
+
+[![Star History Chart](https://star-history.dera.page/svg?repos=ChunelFeng/CGraph&type=Date)](https://star-history.dera.page/#ChunelFeng/CGraph&Date)
 
 ------------
 <details>
@@ -348,10 +406,45 @@ int main() {
 * 修复辅助线程异常等待问题
 * 更新`tutorial`内容
 
-[2025.02.08 - v3.0.0 - Chunel]
+[2025.03.16 - v3.0.0 - Chunel]
+* 提供 Python 版本
 * 提供`stage`(阶段)功能，用于`element`之间同步运行
-* 提供 Python 封装
 * 更新`tutorial`内容
+
+[2025.05.04 - v3.1.0 - Chunel]
+* 提供 全量功能 Python 版本
+* 提供 Python 和 C++ 混合编程功能
+* 提供 Python 打包功能，支持 `pip3 install PyCGraph` 安装
+
+[2025.06.15 - v3.1.1 - Chunel]
+* 提供 C# 和 Java 版本
+* 提供 `CODE_OF_CONDUCT.md` 文档
+
+[2025.09.06 - v3.1.2 - Chunel]
+* 提供 Go 版本
+* 优化 `message` 功能
+* 优化 `aspect` 功能
+
+[2025.11.08 - v3.2.2 - Chunel]
+* 提供 本地保存和加载 功能
+* 修改 `PyCGraph` 为 `pycgraph`，支持 `pip3 install pycgraph` 安装
+
+[2026.03.24 - v3.2.3 - Chunel]
+* 优化 `message` 功能
+* 优化 稳定性
+
+[2026.05.10 - v3.2.4 - Chunel]
+* 优化 `pycgraph` 功能
+
+[2026.08.15 - v3.2.5 - Chunel]
+* 优化调度性能
+* 优化 `pycgraph` 功能
+* 提供 lite 运行模式
+* 修改 `GSome` 使用方式
+
+[2026.08.22 - v3.3.0 - Chunel]
+* 优化 `GParam` 的 trace 功能
+* 优化 `pycgraph` 功能
 
 </details>
 
@@ -360,14 +453,9 @@ int main() {
 <summary><b>附录-2. 感谢</b></summary>
 
 * 感谢 [Doocs 微信公众号](https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzIxNjA5ODQ0OQ==&action=getalbum&album_id=1989460124624551937&scene=173&from_msgid=2654703194&from_itemidx=1&count=3&nolastread=1#wechat_redirect) 刊登相关介绍文档，欢迎加入 [Doocs 开源社区](https://github.com/doocs)
-
 * 感谢《HelloGithub》期刊介绍和推荐：[HelloGithub 第70期](https://github.com/521xueweihan/HelloGitHub/blob/master/content/HelloGitHub70.md)
 
 <p align="center"><img src="https://github.com/ChunelFeng/CGraph/blob/main/doc/image/HelloGithub%20Logo.gif"/></p>
-
-* 感谢《Github中文排行榜》介绍和推荐：[Github中文排行榜 总榜-C++分类](https://github.com/GrowingGit/GitHub-Chinese-Top-Charts/blob/master/content/charts/overall/software/CPP.md)
-
-<p align="center"><img src="https://github.com/ChunelFeng/CGraph/blob/main/doc/image/GrowingGit%20Logo.png"/></p>
 
 * Thanks to the recommendation from [awesome-cpp](https://github.com/fffaraz/awesome-cpp), we all know, it is the most authoritative recommendation list for cpp project in the world
 * Thanks to the recommendation from `Taskflow Group`: [awesome-parallel-computing](https://github.com/taskflow/awesome-parallel-computing), and we always treat [taskflow](https://github.com/taskflow/taskflow) as a role model

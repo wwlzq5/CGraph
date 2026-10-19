@@ -34,7 +34,19 @@ protected:
      * 分析当前的信息，主要用于区分dag的类型
      * @return
      */
-    CVoid analysisDagType(const GSortedGElementPtrSet& elements);
+    CVoid analysisDagType();
+
+    /**
+     * 解析纯并行的情况下，元素矩阵
+     * @return
+     */
+    CVoid analysisParallelMatrix();
+
+    /**
+     * 创建 common run 的情况下，element对应的任务
+     * @return
+     */
+    CVoid makeCommonTask();
 
     /**
      * 动态图运行
@@ -50,6 +62,13 @@ protected:
      * @return
     */
     CVoid process(GElementPtr element, CBool affinity);
+
+    /**
+     * element 前后执行逻辑
+     * @param element
+     * @return
+     */
+    CVoid innerExec(GElementPtr element);
 
     /**
      * element 运行完成处理
@@ -72,22 +91,44 @@ protected:
     CVoid parallelRunAll();
 
     /**
+     * 并发的时候，仅执行单个逻辑
+     * @return
+     * @notice 仅在 parallelRunAll 中使用
+     */
+    CVoid parallelRunOne(GElementPtr element);
+
+    /**
      * 串行的执行所有element
      * @return
      */
     CVoid serialRunAll();
 
-private:
-    GElementPtrArr total_element_arr_;                                                   // pipeline中所有的元素信息集合
-    GElementPtrArr front_element_arr_;                                                   // 没有依赖的元素信息
-    CSize total_end_size_ = 0;                                                           // 图结束节点数量
-    CSize finished_end_size_ = 0;                                                        // 执行结束节点数量
-    CStatus cur_status_;                                                                 // 当前全局的状态信息
-    internal::GEngineDagType dag_type_ = { internal::GEngineDagType::COMMON };           // 当前元素的排布形式
+    /**
+     * 执行运行前的准备工作
+     * @return
+     */
+    CVoid prepareRun();
 
-    std::mutex lock_;
-    std::condition_variable cv_;
-    std::mutex status_lock_;
+    /**
+     * 快速校验结束
+     * @return
+     * @notice 为了方式线程快速进入内核态，短时间在用户层停留，性能加速
+     */
+    template<typename Pred>
+    CBool isFastFinished(Pred&& check);
+
+private:
+    GElementPtrArr total_element_arr_ {};                                                // pipeline中所有的元素信息集合
+    GElementPtrArr front_element_arr_ {};                                                // 没有依赖的元素信息
+    CSize total_end_size_ = 0;                                                           // 图结束节点数量
+    std::atomic<CSize> finished_end_size_ {0};                                        // 执行结束节点数量
+    CStatus cur_status_ {};                                                              // 当前全局的状态信息
+    std::atomic<CSize> parallel_run_num_ {0};                                         // 纯并行时，执行的个数信息
+    GElementPtrMat2D parallel_element_matrix_ {};                                        // 纯并行时，记录分解后的数据
+    internal::GEngineDagType dag_type_ = { internal::GEngineDagType::COMMON };           // 当前元素的排布形式
+    CInt wait_busy_epoch_ {0};                                                           // dag执行结束前，轮询等待的次数
+
+    UCvMutex locker_;
 
     friend class CAllocator;
 };

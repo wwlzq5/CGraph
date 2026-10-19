@@ -10,7 +10,6 @@
 #define CGRAPH_UTHREADPOOLDEFINE_H
 
 #include <thread>
-# include <mutex>
     #if __cplusplus >= 201703L
 #include <shared_mutex>
     #endif
@@ -19,7 +18,7 @@
 
 CGRAPH_NAMESPACE_BEGIN
 
-static const CInt CGRAPH_CPU_NUM = (CInt)std::thread::hardware_concurrency();
+static const CInt CGRAPH_CPU_NUM = static_cast<CInt>(std::thread::hardware_concurrency());
 static const CInt CGRAPH_THREAD_TYPE_PRIMARY = 1;
 static const CInt CGRAPH_THREAD_TYPE_SECONDARY = 2;
     #ifndef _WIN32
@@ -39,9 +38,10 @@ static const CUInt CGRAPH_DEFAULT_RINGBUFFER_SIZE = 64;                         
 static const CIndex CGRAPH_MAIN_THREAD_ID = -1;                                             // 启动线程id标识（非上述主线程）
 static const CIndex CGRAPH_SECONDARY_THREAD_COMMON_ID = -2;                                 // 辅助线程统一id标识
 
-static const CInt CGRAPH_DEFAULT_TASK_STRATEGY = -1;                                         // 默认线程调度策略
-static const CInt CGRAPH_POOL_TASK_STRATEGY = -2;                                            // 固定用pool中的队列的调度策略
-static const CInt CGRAPH_LONG_TIME_TASK_STRATEGY = -101;                                     // 长时间任务调度策略
+static const CIndex CGRAPH_DEFAULT_TASK_STRATEGY = -1;                                      // 默认线程调度策略
+static const CIndex CGRAPH_POOL_TASK_STRATEGY = -2;                                         // 固定用pool中的队列的调度策略
+static const CIndex CGRAPH_LONG_TIME_TASK_STRATEGY = -101;                                  // 长时间任务调度策略
+static const CIndex CGRAPH_TRIGGER_ALL_THREAD_STRATEGY = -102;                              // 触发线程逻辑调度策略
 
 /**
  * 以下为线程池配置信息
@@ -54,13 +54,15 @@ static const CBool CGRAPH_BATCH_TASK_ENABLE = false;                            
 static const CInt CGRAPH_MAX_LOCAL_BATCH_SIZE = 2;                                           // 批量执行本地任务最大值
 static const CInt CGRAPH_MAX_POOL_BATCH_SIZE = 2;                                            // 批量执行通用任务最大值
 static const CInt CGRAPH_MAX_STEAL_BATCH_SIZE = 2;                                           // 批量盗取任务最大值
-static const CInt CGRAPH_PRIMARY_THREAD_BUSY_EPOCH = 5;                                      // 主线程进入wait状态的轮数，数值越大，理论性能越高，但空转可能性也越大
+static const CInt CGRAPH_PIPIELINE_WAIT_BUSY_EPOCH = 0;                                      // pipeline 开始wait结束时，等待轮数。在多个小任务的情况下，极大提升性能
+static const CInt CGRAPH_PRIMARY_THREAD_BUSY_EPOCH = 3;                                      // 主线程进入wait状态的轮数，数值越大，理论性能越高，但空转可能性也越大
 static const CMSec CGRAPH_PRIMARY_THREAD_EMPTY_INTERVAL = 1000;                              // 主线程进入休眠状态的默认时间
 static const CSec CGRAPH_SECONDARY_THREAD_TTL = 10;                                          // 辅助线程ttl，单位为s
 static const CBool CGRAPH_MONITOR_ENABLE = false;                                            // 是否开启监控程序
 static const CSec CGRAPH_MONITOR_SPAN = 5;                                                   // 监控线程执行间隔，单位为s
 static const CMSec CGRAPH_QUEUE_EMPTY_INTERVAL = 1000;                                       // 队列为空时，等待的时间。仅针对辅助线程，单位为ms
 static const CBool CGRAPH_BIND_CPU_ENABLE = false;                                           // 是否开启绑定cpu模式（仅针对主线程）
+static const CBool CGRAPH_DELIVER_RUNNING_PRIMARY_THREAD_ENABLE = false;                     // 是否可以将任务投递到正在运行主线程的队列中。开启后，遇到描述情况，则退化为投递到公共队列，并且触发所有线程
 static const CInt CGRAPH_PRIMARY_THREAD_POLICY = CGRAPH_THREAD_SCHED_OTHER;                  // 主线程调度策略
 static const CInt CGRAPH_SECONDARY_THREAD_POLICY = CGRAPH_THREAD_SCHED_OTHER;                // 辅助线程调度策略
 static const CInt CGRAPH_PRIMARY_THREAD_PRIORITY = CGRAPH_THREAD_MIN_PRIORITY;               // 主线程调度优先级（取值范围0~99，配合调度策略一起使用，不建议不了解相关内容的童鞋做修改）

@@ -26,7 +26,7 @@ GElementPtr GElement::addGAspect(TParam* param) {
 
     GAspectPtr aspect = CGRAPH_SAFE_MALLOC_COBJECT(TAspect)
     aspect->setAParam<TParam>(param);
-    aspect->setBelong(this);
+    // 为了适配 python版本，所有的aspect的信息填充，放到 pipeline 初始化之前的瞬间，统一做掉了
     aspect_manager_->add(aspect);
     return this;
 }
@@ -40,7 +40,6 @@ GElementPtr GElement::addGAspect(Args... args) {
     }
 
     auto aspect = CAllocator::safeMallocTemplateCObject<TAspect>(std::forward<Args>(args)...);
-    aspect->setBelong(this);
     aspect_manager_->add(aspect);
     return this;
 }
@@ -66,7 +65,7 @@ GElementPtr GElement::addEParam(const std::string& key, T* param) {
 template<typename T,
         c_enable_if_t<std::is_base_of<GElementParam, T>::value, int>>
 T* GElement::getEParam(const std::string& key) {
-    auto iter = local_params_.find(key);
+    const auto iter = local_params_.find(key);
     if (iter == local_params_.end()) {
         return nullptr;
     }

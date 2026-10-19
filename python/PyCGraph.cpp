@@ -8,6 +8,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
 
 #include "CGraph.h"
 #include "wrapper/PyWrapperInclude.h"
@@ -15,71 +16,356 @@
 using namespace CGraph;
 namespace py = pybind11;
 
-PYBIND11_MODULE(PyCGraph, m) {
-    py::class_<CStatus>(m, "CStatus")
-        .def(py::init<>())
-        .def(py::init<int, const std::string&>())
-        .def("getCode", &CStatus::getCode)
-        .def("getInfo", &CStatus::getInfo)
-        .def("isOK", &CStatus::isOK);
+PYBIND11_MODULE(pycgraph, cg) {
+    cg.doc() = "CGraph with python api, github: https://github.com/ChunelFeng/CGraph";
 
-    py::enum_<GMultiConditionType>(m, "GMultiConditionType")
+    py::class_<UThreadPoolConfig>(cg, "UThreadPoolConfig")
+        .def(py::init<>())
+        .def_readwrite("default_thread_size", &UThreadPoolConfig::default_thread_size_)
+        .def_readwrite("secondary_thread_size", &UThreadPoolConfig::secondary_thread_size_)
+        .def_readwrite("max_thread_size", &UThreadPoolConfig::max_thread_size_)
+        .def_readwrite("max_task_steal_range", &UThreadPoolConfig::max_task_steal_range_)
+        .def_readwrite("max_local_batch_size", &UThreadPoolConfig::max_local_batch_size_)
+        .def_readwrite("max_pool_batch_size", &UThreadPoolConfig::max_pool_batch_size_)
+        .def_readwrite("max_steal_batch_size", &UThreadPoolConfig::max_steal_batch_size_)
+        .def_readwrite("pipeline_wait_busy_epoch", &UThreadPoolConfig::pipeline_wait_busy_epoch_)
+        .def_readwrite("primary_thread_busy_epoch", &UThreadPoolConfig::primary_thread_busy_epoch_)
+        .def_readwrite("primary_thread_empty_interval", &UThreadPoolConfig::primary_thread_empty_interval_)
+        .def_readwrite("secondary_thread_ttl", &UThreadPoolConfig::secondary_thread_ttl_)
+        .def_readwrite("monitor_span", &UThreadPoolConfig::monitor_span_)
+        .def_readwrite("queue_empty_interval", &UThreadPoolConfig::queue_emtpy_interval_)
+        .def_readwrite("primary_thread_policy", &UThreadPoolConfig::primary_thread_policy_)
+        .def_readwrite("secondary_thread_policy", &UThreadPoolConfig::secondary_thread_policy_)
+        .def_readwrite("primary_thread_priority", &UThreadPoolConfig::primary_thread_priority_)
+        .def_readwrite("secondary_thread_priority", &UThreadPoolConfig::secondary_thread_priority_)
+        .def_readwrite("bind_cpu_enable", &UThreadPoolConfig::bind_cpu_enable_)
+        .def_readwrite("batch_task_enable", &UThreadPoolConfig::batch_task_enable_)
+        .def_readwrite("monitor_enable", &UThreadPoolConfig::monitor_enable_)
+        .def_readwrite("deliver_running_primary_thread_enable", &UThreadPoolConfig::deliver_running_primary_thread_enable_);
+
+    py::class_<GElementRelation>(cg, "GElementRelation")
+        .def(py::init<>())
+        .def_readonly("predecessors", &GElementRelation::predecessors_)
+        .def_readonly("successors", &GElementRelation::successors_)
+        .def_readonly("children", &GElementRelation::children_)
+        .def_readonly("belong", &GElementRelation::belong_);
+
+    py::class_<UThreadPool>(cg, "UThreadPool")
+        .def(py::init<CBool, const UThreadPoolConfig&>(),
+             py::arg("autoInit") = true,
+             py::arg("config") = UThreadPoolConfig{})
+        .def("setConfig", &UThreadPool::setConfig,
+              py::arg("config"),
+              py::keep_alive<1, 2>())
+        .def("getConfig", &UThreadPool::getConfig)
+        .def("init", &UThreadPool::init)
+        .def("destroy", &UThreadPool::destroy)
+        .def("isInit", &UThreadPool::isInit);
+
+    py::register_exception<CException>(cg, "CException");
+
+    py::enum_<GEngineType>(cg, "GEngineType")
+        .value("DYNAMIC", GEngineType::DYNAMIC)
+        .value("TOPO", GEngineType::TOPO)
+        .value("STATIC", GEngineType::STATIC)
+        .export_values();
+
+    py::enum_<GElementTimeoutStrategy>(cg, "GElementTimeoutStrategy")
+        .value("AS_ERROR", GElementTimeoutStrategy::AS_ERROR)
+        .value("HOLD_BY_PIPELINE", GElementTimeoutStrategy::HOLD_BY_PIPELINE)
+        .value("NO_HOLD", GElementTimeoutStrategy::NO_HOLD)
+        .export_values();
+
+    py::enum_<GMultiConditionType>(cg, "GMultiConditionType")
         .value("SERIAL", GMultiConditionType::SERIAL)
         .value("PARALLEL", GMultiConditionType::PARALLEL)
         .export_values();
 
-    py::class_<GParam, PywGParam, std::unique_ptr<GParam, py::nodelete> >(m, "GParam")
+    py::enum_<GEventType>(cg, "GEventType")
+        .value("SYNC", GEventType::SYNC)
+        .value("ASYNC", GEventType::ASYNC)
+        .export_values();
+
+    py::enum_<GEventAsyncStrategy>(cg, "GEventAsyncStrategy")
+        .value("PIPELINE_RUN_FINISH", GEventAsyncStrategy::PIPELINE_RUN_FINISH)
+        .value("PIPELINE_DESTROY", GEventAsyncStrategy::PIPELINE_DESTROY)
+        .value("NO_WAIT", GEventAsyncStrategy::NO_WAIT)
+        .export_values();
+
+    py::enum_<CFunctionType>(cg, "CFunctionType")
+        .value("INIT", CFunctionType::INIT)
+        .value("RUN", CFunctionType::RUN)
+        .value("DESTROY", CFunctionType::DESTROY)
+        .export_values();
+
+    py::enum_<GElementState>(cg, "GElementState")
+        .value("NORMAL", GElementState::NORMAL)
+        .value("CANCEL", GElementState::CANCEL)
+        .value("SUSPEND", GElementState::SUSPEND)
+        .value("TIMEOUT", GElementState::TIMEOUT)
+        .export_values();
+    cg.attr("GPipelineState") = cg.attr("GElementState");
+
+    py::enum_<std::launch>(cg, "StdLaunchPolicy")
+        .value("ASYNC", std::launch::async)
+        .value("DEFERRED", std::launch::deferred)
+        .export_values();
+
+    py::class_<std::shared_future<void> >(cg, "StdSharedFutureVoid")
+        .def("wait", [] (std::shared_future<void>& fut) {
+            fut.wait();
+        }, py::call_guard<py::gil_scoped_release>());
+
+    py::class_<std::future<CStatus> >(cg, "StdFutureCStatus")
+        .def("get", [] (std::future<CStatus>& fut) {
+            return fut.get();
+        }, py::call_guard<py::gil_scoped_release>())
+        .def("wait", [] (std::future<CStatus>& fut) {
+            fut.wait();
+        }, py::call_guard<py::gil_scoped_release>());
+
+    py::class_<CStatus>(cg, "CStatus")
+        .def(py::init<>())
+        .def(py::init<int>(),
+             py::arg("errorCode"))
+        .def(py::init<const std::string&>(),
+             py::arg("errorInfo"))
+        .def(py::init<int, const std::string&>(),
+             py::arg("errorCode"),
+             py::arg("errorInfo"))
+        .def("__iadd__", &CStatus::operator+=,
+             py::return_value_policy::reference)
+        .def("__bool__", &CStatus::operator bool)
+        .def("getCode", &CStatus::getCode)
+        .def("getInfo", &CStatus::getInfo)
+        .def("reset", &CStatus::reset)
+        .def("isOK", &CStatus::isOK)
+        .def("isErr", &CStatus::isErr)
+        .def("isCrash", &CStatus::isCrash);
+
+    py::implicitly_convertible<int, CStatus>();
+    py::implicitly_convertible<std::string, CStatus>();
+
+    py::class_<GAspect, PywGAspect, std::unique_ptr<GAspect, py::nodelete> >(cg, "GAspect")
+        .def(py::init<>())
+        .def("getName", &GAspect::__getName_4expose)
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GAspect)
+        .PYCGRAPH_DEF_GEVENT_PYBIND11_FUNCTIONS(GAspect);
+
+    py::class_<GDaemon, PywGDaemon, std::unique_ptr<GDaemon, py::nodelete> >(cg, "GDaemon")
+        .def(py::init<>())
+        .def("getInterval", &GDaemon::__getInterval_4expose)
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GDaemon)
+        .PYCGRAPH_DEF_GEVENT_PYBIND11_FUNCTIONS(GDaemon);
+
+    py::class_<GEvent, PywGEvent, std::unique_ptr<GEvent, py::nodelete> >(cg, "GEvent")
+        .def(py::init<>())
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GEvent);
+
+    py::class_<GStage, PywGStage, std::unique_ptr<GStage, py::nodelete> >(cg, "GStage")
+        .def(py::init<>())
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GStage);
+
+    py::class_<GParam, PywGParam, std::unique_ptr<GParam, py::nodelete> >(cg, "GParam")
+        .def(py::init<>())
+        .def("lock", &GParam::lock,
+             py::call_guard<py::gil_scoped_release>())
+        .def("unlock", &GParam::unlock,
+             py::call_guard<py::gil_scoped_release>())
+        .def("tryLock", &GParam::tryLock,
+             py::call_guard<py::gil_scoped_release>())
+        .def("addTrace", &GParam::addTrace,
+             py::arg("trace"),
+             py::arg("repeatable") = true,
+             py::call_guard<py::gil_scoped_release>())
+        .def("removeTrace", &GParam::removeTrace,
+             py::arg("trace"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("clearTrace", &GParam::clearTrace,
+             py::call_guard<py::gil_scoped_release>())
+        .def("getTraces", &GParam::getTraces,
+             py::call_guard<py::gil_scoped_release>())
+        .def("__enter__", [](GParam& self) -> GParam& {
+                self.lock();
+                return self;
+            }, py::call_guard<py::gil_scoped_release>(), py::return_value_policy::reference_internal)
+        .def("__exit__", [](GParam& self, py::object, py::object, py::object) {
+                self.unlock();
+                return false;
+            }, py::call_guard<py::gil_scoped_release>());
+
+    py::class_<GPassedParam, PywGPassedParam, std::unique_ptr<GPassedParam, py::nodelete> >(cg, "GPassedParam")
         .def(py::init<>());
+    cg.attr("GElementParam") = cg.attr("GPassedParam");
+    cg.attr("GDaemonParam") = cg.attr("GPassedParam");
+    cg.attr("GStageParam") = cg.attr("GPassedParam");
+    cg.attr("GEventParam") = cg.attr("GPassedParam");
 
-    py::class_<PyGPipeline, std::unique_ptr<PyGPipeline, py::nodelete> >(m, "GPipeline")
-        .def(py::init<>())
-        .def("init", &PyGPipeline::init)
-        .def("run", &PyGPipeline::run, py::call_guard<py::gil_scoped_release>())
-        .def("process", &PyGPipeline::process, py::call_guard<py::gil_scoped_release>(),
-             py::arg("runTimes") = 1)
-        .def("destroy", &PyGPipeline::destroy)
-        .def("registerGElement", &PyGPipeline::registerGElement,
-            py::arg("element"),
-            py::arg("depends") = GElementPtrSet{},
-            py::arg("name") = CGRAPH_EMPTY,
-            py::arg("loop") = CGRAPH_DEFAULT_LOOP_TIMES,
-            "register a GElement with dependencies, name, and loop count.");
+    py::class_<GPipeline, std::unique_ptr<GPipeline, PywGPipelineDeleter> >(cg, "GPipeline")
+        .def(py::init<>([]() { return GPipelineFactory::create(); }))
+        .def("init", &GPipeline::init)
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GPipeline)
+        .def("setUniqueThreadPoolConfig", &GPipeline::setUniqueThreadPoolConfig,
+             py::arg("config"))
+        .def("setSharedThreadPool", &GPipeline::setSharedThreadPool,
+             py::arg("ptr"),
+             py::call_guard<py::gil_scoped_release>(),
+             py::keep_alive<1, 2>())
+        .def("setGEngineType", &GPipeline::setGEngineType,
+             py::arg("type"))
+        .def("run", &GPipeline::run,
+             py::call_guard<py::gil_scoped_release>())
+        .def("process", &GPipeline::process,
+             py::arg("runTimes") = 1,
+             py::call_guard<py::gil_scoped_release>())
+        .def("destroy", &GPipeline::destroy)
+        .def("addGEvent", &GPipeline::__addGEvent_4expose,
+             py::arg("event"),
+             py::arg("key"),
+             py::keep_alive<1, 2>())
+        .def("addGDaemon", &GPipeline::__addGDaemon_4expose,
+             py::arg("daemon"),
+             py::arg("ms"),
+             py::keep_alive<1, 2>())
+        .def("addGStage", &GPipeline::__addGStage_4expose,
+             py::arg("stage"),
+             py::arg("key"),
+             py::arg("threshold"),
+             py::keep_alive<1, 2>())
+        .def("asyncRun", &GPipeline::asyncRun,
+             py::arg("policy") = std::launch::async,
+             py::call_guard<py::gil_scoped_release>())
+        .def("asyncProcess", &GPipeline::asyncProcess,
+             py::arg("runTimes") = CGRAPH_DEFAULT_LOOP_TIMES,
+             py::arg("policy") = std::launch::async,
+             py::call_guard<py::gil_scoped_release>())
+        .def("cancel", &GPipeline::cancel,
+            py::call_guard<py::gil_scoped_release>())
+        .def("suspend", &GPipeline::suspend,
+             py::call_guard<py::gil_scoped_release>())
+        .def("resume", &GPipeline::resume,
+             py::call_guard<py::gil_scoped_release>())
+        .def("perf", &GPipeline::__perf_4expose,
+             py::call_guard<py::gil_scoped_release>())
+        .def("dump", &GPipeline::__dump_4expose)
+        .def("trim", &GPipeline::trim)
+        .def("makeSerial", &GPipeline::makeSerial)
+        .def("getMaxPara", &GPipeline::getMaxPara)
+        .def("getCurState", &GPipeline::getCurState)
+        .def("checkSeparate", &GPipeline::checkSeparate,
+             py::arg("fst"),
+             py::arg("snd"))
+        .def("registerGElement", &GPipeline::__registerGElement_4expose,
+             py::arg("element"),
+             py::arg("depends") = GElementPtrSet{},
+             py::arg("name") = CGRAPH_EMPTY,
+             py::arg("loop") = CGRAPH_DEFAULT_LOOP_TIMES,
+             py::keep_alive<1, 2>());
 
-    py::class_<GElement, PywGElement, std::unique_ptr<GElement, py::nodelete> >(m, "GElement")
+    py::class_<GPipelineManager>(cg, "GPipelineManager")
         .def(py::init<>())
-        .def("createGParam", &GElement::__createGParam_4py)
-        .def("getGParam", &GElement::__getGParam_4py)
+        .def("init", &GPipelineManager::init)
+        .def("run", &GPipelineManager::run,
+             py::call_guard<py::gil_scoped_release>())
+        .def("destroy", &GPipelineManager::destroy)
+        .def("add", &GPipelineManager::add,
+             py::arg("ptr"),
+             py::keep_alive<1, 2>())
+        .def("clear", &GPipelineManager::clear)
+        .def("find", &GPipelineManager::find,
+             py::arg("ptr"))
+        .def("remove", &GPipelineManager::remove,
+             py::arg("ptr"))
+        .def("getSize", &GPipelineManager::getSize)
+        .def("fetch", &GPipelineManager::fetch,
+             py::call_guard<py::gil_scoped_release>())
+        .def("release", &GPipelineManager::release,
+             py::arg("ptr"),
+             py::call_guard<py::gil_scoped_release>());
+
+    py::class_<GElement, PywGElement, std::unique_ptr<GElement, py::nodelete> >(cg, "GElement")
+        .def(py::init<>())
+        .def("__str__", &GElement::__str_4expose)
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GElement)
+        .PYCGRAPH_DEF_GEVENT_PYBIND11_FUNCTIONS(GElement)
+        .def("waitGStage", &GElement::__waitGStage_4expose,
+             py::arg("key"),
+             py::call_guard<py::gil_scoped_release>())
         .def("getName", &GElement::getName)
-        .def("setName", &GElement::setName)
+        .def("getSession", &GElement::getSession)
+        .def("getRelation", &GElement::getRelation)
+        .def("getLoop", &GElement::getLoop)
+        .def("getCurState", &GElement::getCurState)
+        .def("setLoop", &GElement::setLoop,
+             py::arg("loop"))
+        .def("setName", &GElement::setName,
+             py::arg("name"))
+        .def("setLevel", &GElement::setLevel,
+             py::arg("level"))
+        .def("setVisible", &GElement::setVisible,
+             py::arg("visible"))
+        .def("setMacro", &GElement::setMacro,
+             py::arg("macro"))
+        .def("setTimeout", &GElement::setTimeout,
+             py::arg("timeout"),
+             py::arg("strategy") = GElementTimeoutStrategy::AS_ERROR)
+        .def("isTimeout", &GElement::__isTimeout_4expose)
+        .def("isGGroup", &GElement::isGGroup)
+        .def("isGAdaptor", &GElement::isGAdaptor)
+        .def("isGNode", &GElement::isGNode)
+        .def("addGAspect", &GElement::__addGAspect_4expose,
+             py::arg("aspect"),
+             py::keep_alive<1, 2>())
         .def("addDependGElements", &GElement::addDependGElements,
-            py::arg("elements"))
-        .def("setLoop", &GElement::setLoop);
+             py::arg("elements"))
+        .def("removeDepend", &GElement::removeDepend,
+             py::arg("element"));
 
-    py::class_<GNode, PywGNode, GElement, std::unique_ptr<GNode, py::nodelete> >(m, "GNode")
-        .def(py::init<>());
+    py::class_<GNode, PywGNode, GElement, std::unique_ptr<GNode, py::nodelete> >(cg, "GNode")
+        .def(py::init<const std::string&, int>(),
+             py::arg("name"),
+             py::arg("loop") = CGRAPH_DEFAULT_LOOP_TIMES)
+        .def(py::init<const GElementPtrSet&, const std::string&, int>(),
+             py::arg("depends") = GElementPtrSet{},
+             py::arg("name") = CGRAPH_EMPTY,
+             py::arg("loop") = CGRAPH_DEFAULT_LOOP_TIMES);
 
-    py::class_<PyGCluster, GElement, std::unique_ptr<PyGCluster, py::nodelete> >(m, "GCluster")
+    py::class_<GFence, PywGFence, GElement, std::unique_ptr<GFence, py::nodelete> >(cg, "GFence")
         .def(py::init<>())
-        .def("addGElements", &PyGCluster::addGElements,
-            py::arg("elements"));
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GFence)
+        .def("waitGElement", &GFence::waitGElement,
+             py::arg("element"))
+        .def("waitGElements", &GFence::waitGElements,
+             py::arg("elements"))
+        .def("clear", &GFence::clear);
 
-    py::class_<PyGRegion, GElement, std::unique_ptr<PyGRegion, py::nodelete> >(m, "GRegion")
+    py::class_<GFunction, PywGFunction, GElement, std::unique_ptr<GFunction, py::nodelete> >(cg, "GFunction")
         .def(py::init<>())
-        .def("addGElements", &PyGRegion::addGElements,
-            py::arg("elements"));
+        .PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(GFunction)
+        .PYCGRAPH_DEF_GEVENT_PYBIND11_FUNCTIONS(GFunction)
+        .def("setFunction", &GFunction::setFunction,
+             py::arg("type"),
+             py::arg("func"));
 
-    py::class_<PywGCondition, GElement, std::unique_ptr<PywGCondition, py::nodelete> >(m, "GCondition")
-        .def(py::init<>())
-        .def("addGElements", &PywGCondition::addGElements,
-            py::arg("elements"));
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GCluster);
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GRegion);
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GCondition);
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GSerialMultiCondition);
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GParallelMultiCondition);
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GSome);
+    PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(cg, GMutable);
 
-    py::class_<PyGMultiCondition<CGraph::GMultiConditionType::SERIAL>, GElement>(m, "GSerialMultiCondition")
-        .def(py::init<>())
-        .def("addGElements", &PyGMultiCondition<CGraph::GMultiConditionType::SERIAL>::addGElements,
-            py::arg("elements"));
-
-    py::class_<PyGMultiCondition<CGraph::GMultiConditionType::PARALLEL>, GElement>(m, "GParallelMultiCondition")
-        .def(py::init<>())
-        .def("addGElements", &PyGMultiCondition<CGraph::GMultiConditionType::PARALLEL>::addGElements,
-            py::arg("elements"));
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "node", "GNode");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "param", "GParam");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "event", "GEvent");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "aspect", "GAspect");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "daemon", "GDaemon");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "stage", "GStage");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "cluster", "GCluster");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "region", "GRegion");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "condition", "GCondition");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "serial_multi_condition", "GSerialMultiCondition");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "parallel_multi_condition", "GParallelMultiCondition");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "some", "GSome");
+    PYCGRAPH_DECLARE_PYBIND11_DECORATOR(cg, "mutable", "GMutable");
 }

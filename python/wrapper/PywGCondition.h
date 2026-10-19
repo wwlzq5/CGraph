@@ -12,21 +12,23 @@
 #include <pybind11/pybind11.h>
 
 #include "CGraph.h"
-
-namespace py = pybind11;
+#include "PyWrapperMacro.h"
 
 class PywGCondition : public CGraph::GCondition {
 public:
-    explicit PywGCondition() : CGraph::GCondition() {};
-    ~PywGCondition() override {};
+    explicit PywGCondition(const CGraph::GElementPtrArr& elements = CGraph::GElementPtrArr{}) {
+        __addGElements_4expose(elements);
+    }
+    ~PywGCondition() override = default;
 
     CIndex choose() override {
         PYBIND11_OVERLOAD_PURE(CIndex, PywGCondition, choose);
     }
-
-    CStatus addGElements(const CGraph::GElementPtrArr& elements) {
-        return __addElements_4py(elements);
-    }
 };
+
+PYCGRAPH_DECLARE_GGROUP_INTERFACE_CLASS(PywGCondition,
+    CIndex choose() override {
+        PYBIND11_OVERLOAD_PURE(CIndex, PywGConditionInterface, choose);
+    });
 
 #endif //CGRAPH_PYWGCONDITION_H

@@ -14,7 +14,8 @@
 #include <map>
 #include <future>
 #include <thread>
-#include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <memory>
 #include <functional>
 
@@ -64,40 +65,27 @@ public:
     /**
      * 提交任务信息
      * @tparam FunctionType
-     * @param task
+     * @param func
      * @param index
      * @return
      */
     template<typename FunctionType>
-    auto commit(const FunctionType& task,
+    auto commit(FunctionType&& func,
                 CIndex index = CGRAPH_DEFAULT_TASK_STRATEGY)
-    -> std::future<decltype(std::declval<FunctionType>()())>;
+    -> std::future<decltype(std::declval<typename std::decay<FunctionType>::type>()())>;
 
     /**
      * 向特定的线程id中，提交任务信息
      * @tparam FunctionType
-     * @param task
+     * @param func
      * @param tid 线程id。如果超出主线程个数范围，则默认写入pool的通用队列中
      * @param enable 是否启用上锁/解锁功能
      * @param lockable 上锁(true) / 解锁(false)
      * @return
      */
     template<typename FunctionType>
-    auto commitWithTid(const FunctionType& task, CIndex tid, CBool enable, CBool lockable)
-    -> std::future<decltype(std::declval<FunctionType>()())>;
-
-    /**
-     * 根据优先级，执行任务
-     * @tparam FunctionType
-     * @param task
-     * @param priority 优先级别。自然序从大到小依次执行
-     * @return
-     * @notice 建议，priority 范围在 [-100, 100] 之间
-     */
-    template<typename FunctionType>
-    auto commitWithPriority(const FunctionType& task,
-                            int priority)
-    -> std::future<decltype(std::declval<FunctionType>()())>;
+    auto commitWithTid(FunctionType&& func, CIndex tid, CBool enable, CBool lockable)
+    -> std::future<decltype(std::declval<typename std::decay<FunctionType>::type>()())>;
 
     /**
      * 异步执行任务
@@ -105,9 +93,31 @@ public:
      * @param task
      * @param index
      */
-    template<typename FunctionType>
-    CVoid execute(const FunctionType& task,
+    template<typename FunctionType,
+        typename std::enable_if<!std::is_same<typename std::decay<FunctionType>::type, UTask>::value, int>::type = 0>
+    CVoid execute(FunctionType&& task,
                   CIndex index = CGRAPH_DEFAULT_TASK_STRATEGY);
+
+    /**
+     * 异步执行已封装的任务。队列仅借用 task 中的执行内容，不接管其生命周期。
+     * task 必须存活到本次异步执行结束，并且可以被重复提交。
+     * @param task
+     * @param index
+     */
+    CVoid execute(const UTask* task,
+                  CIndex index = CGRAPH_DEFAULT_TASK_STRATEGY);
+
+    /**
+     * 异步写入特定thread id，执行信息
+     * @tparam FunctionType
+     * @param task
+     * @param tid
+     * @param enable
+     * @param lockable
+     * @return
+     */
+    template<typename FunctionType>
+    CVoid executeWithTid(FunctionType&& task, CIndex tid, CBool enable, CBool lockable);
 
     /**
      * 执行任务组信息
@@ -121,7 +131,7 @@ public:
 
     /**
      * 针对单个任务的情况，复用任务组信息，实现单个任务直接执行
-     * @param task
+     * @param func
      * @param ttl
      * @param onFinished
      * @return
@@ -164,6 +174,12 @@ public:
      */
     CStatus releaseSecondaryThread(CInt size);
 
+    /**
+     * 通知所有thread 开启
+     * @return
+     */
+    CSize wakeupAllThread();
+
 protected:
     /**
      * 根据传入的策略信息，确定最终执行方式
@@ -178,19 +194,27 @@ protected:
      */
     CVoid monitor();
 
+    /**
+     * 将任务投递到线程池内部
+     * @param task
+     * @param index
+     */
+    CVoid envokeTask(UTask&& task, CIndex index);
+
     CGRAPH_NO_ALLOWED_COPY(UThreadPool)
 
 private:
     CBool is_init_ { false };                                                       // 是否初始化
-    CInt cur_index_ = 0;                                                            // 记录放入的线程数
-    UAtomicQueue<UTask> task_queue_;                                                // 用于存放普通任务
-    UAtomicPriorityQueue<UTask> priority_task_queue_;                               // 运行时间较长的任务队列，仅在辅助线程中执行
+    std::atomic<CIndex> cur_index_ { 0 };                                        // 记录被轮询到的线程index的位置
+    UAtomicQueue<UTask> task_queue_ {};                                             // 用于存放普通任务
+    UAtomicQueue<UTask> long_time_task_queue_ {};                                   // 运行时间较长的任务队列，仅在辅助线程中执行
     std::vector<UThreadPrimaryPtr> primary_threads_;                                // 记录所有的主线程
     std::list<std::unique_ptr<UThreadSecondary>> secondary_threads_;                // 用于记录所有的辅助线程
     UThreadPoolConfig config_;                                                      // 线程池设置值
     std::thread monitor_thread_;                                                    // 监控线程
     std::map<CSize, int> thread_record_map_;                                        // 线程记录的信息
     std::mutex st_mutex_;                                                           // 辅助线程发生变动的时候，加的mutex信息
+    std::mutex wakeup_mutex_;                                                       // 防止wakeupAllThread并发重入
 };
 
 using UThreadPoolPtr = UThreadPool *;

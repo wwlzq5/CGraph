@@ -12,16 +12,35 @@
 #include <pybind11/pybind11.h>
 
 #include "CGraph.h"
-
-namespace py = pybind11;
+#include "PyWrapperMacro.h"
 
 class PywGNode : public CGraph::GNode {
+public:
+    explicit PywGNode(const std::string& name,
+                      int loop = CGraph::CGRAPH_DEFAULT_LOOP_TIMES) {
+        setName(name);
+        setLoop(loop);
+    }
+
+    explicit PywGNode(const CGraph::GElementPtrSet& depends = CGraph::GElementPtrSet{},
+                      const std::string& name = CGraph::CGRAPH_EMPTY,
+                      int loop = CGraph::CGRAPH_DEFAULT_LOOP_TIMES) {
+        addDependGElements(depends);
+        setLoop(loop);
+        setName(name);
+    }
+
+    ~PywGNode() override = default;
+
 protected:
     CStatus init() override {
         PYBIND11_OVERLOAD(CStatus, GNode, init);
     }
 
     CStatus run() override {
+        pybind11::gil_scoped_acquire gil;
+        pybind11::detail::loader_life_support lls;    // support python function return 0 or "" directly
+
         PYBIND11_OVERLOAD_PURE(CStatus, GNode, run);
     }
 
@@ -29,13 +48,7 @@ protected:
         PYBIND11_OVERLOAD(CStatus, GNode, destroy);
     }
 
-    CBool isHold() override {
-        PYBIND11_OVERLOAD(CBool, GNode, isHold);
-    }
-
-    CBool isMatch() override {
-        PYBIND11_OVERLOAD(CBool, GNode, isMatch);
-    }
+    PYCGRAPH_DECLARE_GELEMENT_COMMON_FUNCTIONS(CGraph::GNode)
 };
 
 #endif //CGRAPH_PYWGNODE_H

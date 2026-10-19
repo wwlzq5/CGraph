@@ -9,7 +9,6 @@
 #ifndef CGRAPH_GSOME_H
 #define CGRAPH_GSOME_H
 
-#include <memory>
 #include <mutex>
 #include <condition_variable>
 
@@ -17,12 +16,17 @@
 
 CGRAPH_NAMESPACE_BEGIN
 
-template<CInt TriggerNum = 1>
 class GSome : public GGroup {
 protected:
-    explicit GSome();
+    /**
+     * 设定 wait_num 个数
+     * 当前 group 执行完成 threshold 个后，就可以继续执行
+     * @return
+     */
+    virtual CSize getThreshold() = 0;
 
-    CStatus addElement(GElementPtr element) final;
+protected:
+    explicit GSome();
 
     CStatus run() final;
 
@@ -30,14 +34,14 @@ protected:
 
     CVoid dump(std::ostream& oss) final;
 
-    CBool isHold() final;
-
     CStatus checkSuitable() final;
 
     CGRAPH_NO_ALLOWED_COPY(GSome)
 
+    CStatus addElementEx(GElementPtr element) override;
+
 private:
-    CInt left_num_ = 0;                        // 还剩的触发结束的个数
+    CSize threshold_ {0};                      // 还剩的触发结束的个数
     CStatus cur_status_ ;                      // 记录异步时刻的当前状态信息
 
     std::mutex lock_;
@@ -46,10 +50,9 @@ private:
     friend class GPipeline;
     friend class GDynamicEngine;
     friend class CAllocator;
+    friend class GStorageFactory;
 };
 
 CGRAPH_NAMESPACE_END
-
-#include "GSome.inl"
 
 #endif //CGRAPH_GSOME_H

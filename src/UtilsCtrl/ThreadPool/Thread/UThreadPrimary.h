@@ -31,7 +31,6 @@ protected:
         CGRAPH_ASSERT_NOT_NULL(config_)
 
         is_init_ = true;
-        metrics_.reset();
         buildStealTargets();
         thread_ = std::thread(&UThreadPrimary::run, this);
         setSchedParam();
@@ -47,10 +46,10 @@ protected:
      * @param poolThreads
      * @param config
      */
-    CStatus setThreadPoolInfo(int index,
+    CStatus setThreadPoolInfo(const int index,
                               UAtomicQueue<UTask>* poolTaskQueue,
                               std::vector<UThreadPrimary *>* poolThreads,
-                              UThreadPoolConfigPtr config) {
+                              const UThreadPoolConfigPtr config) {
         CGRAPH_FUNCTION_BEGIN
         CGRAPH_ASSERT_INIT(false)    // 初始化之前，设置参数
         CGRAPH_ASSERT_NOT_NULL(poolTaskQueue, poolThreads, config)
@@ -78,7 +77,7 @@ protected:
          * 理论不会走到这个判断逻辑里面
          */
         if (std::any_of(pool_threads_->begin(), pool_threads_->end(),
-                        [](UThreadPrimary* thd) {
+                        [](const UThreadPrimary* thd) {
                             return nullptr == thd;
                         })) {
             CGRAPH_RETURN_ERROR_STATUS("primary thread is null")
@@ -115,31 +114,35 @@ protected:
      * 休眠一定时间后，然后恢复执行状态，避免出现异常情况导致无法唤醒
      */
     CVoid fatWait() {
-        cur_empty_epoch_++;
-        metrics_.fleet_wait_times_++;
+        ++cur_empty_epoch_;
         CGRAPH_YIELD();
         if (cur_empty_epoch_ >= config_->primary_thread_busy_epoch_) {
             CGRAPH_UNIQUE_LOCK lk(mutex_);
-            cv_.wait_for(lk, std::chrono::milliseconds(config_->primary_thread_empty_interval_));
-            metrics_.deep_wait_times_++;
+            const auto ready = [this] {
+                return 0 == cur_empty_epoch_ || !wsq_.isEmpty() || !pool_task_queue_->empty() || !done_;
+            };
+
+            if (!ready()) {
+                is_running_ = false;
+                cv_.wait_for(lk, std::chrono::milliseconds(config_->primary_thread_empty_interval_), ready);
+                is_running_ = true;
+            }
             cur_empty_epoch_ = 0;
         }
     }
 
 
     /**
-     * 依次push到任一队列里。如果都失败，则yield，然后重新push
+     * 依次push到队列里。如果失败，则yield，然后重新push
      * @param task
      * @return
      */
     CVoid pushTask(UTask&& task) {
-        while (!(primary_queue_.tryPush(std::move(task))
-                 || secondary_queue_.tryPush(std::move(task)))) {
-            metrics_.local_push_yield_times_++;
-            CGRAPH_YIELD();
+        wsq_.push(std::move(task));
+        {
+            CGRAPH_LOCK_GUARD lk(mutex_);
+            cur_empty_epoch_ = 0;
         }
-        cur_empty_epoch_ = 0;
-        metrics_.local_push_real_num_++;
         cv_.notify_one();
     }
 
@@ -151,14 +154,15 @@ protected:
      * @param lockable true 的时候需要上锁，false 的时候会解锁
      * @return
      */
-    CVoid pushTask(UTask&& task, CBool enable, CBool lockable) {
-        secondary_queue_.push(std::move(task), enable, lockable);    // 通过 second 写入，主要是方便其他的thread 进行steal操作
+    CVoid pushTask(UTask&& task, const CBool enable, const CBool lockable) {
+        wsq_.push(std::move(task), enable, lockable);
         if (enable && !lockable) {
-            cur_empty_epoch_ = 0;
+            {
+                CGRAPH_LOCK_GUARD lk(mutex_);
+                cur_empty_epoch_ = 0;
+            }
             cv_.notify_one();
         }
-        metrics_.local_push_yield_times_++;
-        metrics_.local_push_real_num_++;
     }
 
 
@@ -168,9 +172,7 @@ protected:
      * @return
      */
     CBool popTask(UTaskRef task) {
-        auto result = primary_queue_.tryPop(task) || secondary_queue_.tryPop(task);
-        metrics_.calcLocal(result, 1);
-        return result;
+        return wsq_.tryPop(task);
     }
 
 
@@ -180,14 +182,7 @@ protected:
      * @return
      */
     CBool popTask(UTaskArrRef tasks) {
-        CBool result = primary_queue_.tryPop(tasks, config_->max_local_batch_size_);
-        auto leftSize = config_->max_local_batch_size_ - tasks.size();
-        if (leftSize > 0) {
-            // 如果凑齐了，就不需要了。没凑齐的话，就继续
-            result |= (secondary_queue_.tryPop(tasks, leftSize));
-        }
-        metrics_.calcLocal(result, tasks.size());
-        return result;
+        return wsq_.tryPop(tasks, config_->max_local_batch_size_);
     }
 
 
@@ -196,8 +191,8 @@ protected:
      * @param task
      * @return
      */
-    CBool stealTask(UTaskRef task) {
-        if (unlikely(pool_threads_->size() < config_->default_thread_size_)) {
+    CBool stealTask(UTaskRef task) const {
+        if (unlikely(pool_threads_->size() < static_cast<CSize>(config_->default_thread_size_))) {
             /**
              * 线程池还未初始化完毕的时候，无法进行steal。
              * 确保程序安全运行。
@@ -205,26 +200,19 @@ protected:
             return false;
         }
 
-        /**
-         * 窃取的时候，仅从相邻的primary线程中窃取
-         * 待窃取相邻的数量，不能超过默认primary线程数
-         */
         CBool result = false;
-        for (auto& target : steal_targets_) {
+        for (const auto target : steal_targets_) {
             /**
             * 从线程中周围的thread中，窃取任务。
             * 如果成功，则返回true，并且执行任务。
-             * steal 的时候，先从第二个队列里偷，从而降低触碰锁的概率
             */
             if (likely((*pool_threads_)[target])
-                && (((*pool_threads_)[target])->secondary_queue_.trySteal(task)
-                    || ((*pool_threads_)[target])->primary_queue_.trySteal(task))) {
+                && ((*pool_threads_)[target])->wsq_.trySteal(task)) {
                 result = true;
                 break;
             }
         }
 
-        metrics_.calcSteal(result, 1);
         return result;
     }
 
@@ -234,24 +222,19 @@ protected:
      * @param tasks
      * @return
      */
-    CBool stealTask(UTaskArrRef tasks) {
-        if (unlikely(pool_threads_->size() != config_->default_thread_size_)) {
+    CBool stealTask(UTaskArrRef tasks) const {
+        if (unlikely(pool_threads_->size() != static_cast<CSize>(config_->default_thread_size_))) {
             return false;
         }
 
         CBool result = false;
-        for (auto& target : steal_targets_) {
+        for (const auto target : steal_targets_) {
             if (likely((*pool_threads_)[target])) {
-                result = ((*pool_threads_)[target])->secondary_queue_.trySteal(tasks, config_->max_steal_batch_size_);
-                auto leftSize = config_->max_steal_batch_size_ - tasks.size();
-                if (leftSize > 0) {
-                    result |= ((*pool_threads_)[target])->primary_queue_.trySteal(tasks, leftSize);
-                }
-
+                result = ((*pool_threads_)[target])->wsq_.trySteal(tasks, config_->max_steal_batch_size_);
                 if (result) {
                     /**
                      * 在这里，我们对模型进行了简化。实现的思路是：
-                     * 尝试从邻居主线程(先secondary，再primary)中，获取 x(=max_steal_batch_size_) 个task，
+                     * 尝试从邻居主线程中，获取 x(=max_steal_batch_size_) 个task，
                      * 如果从某一个邻居中，获取了 y(<=x) 个task，则也终止steal的流程
                      * 且如果如果有一次批量steal成功，就认定成功
                      */
@@ -260,7 +243,6 @@ protected:
             }
         }
 
-        metrics_.calcSteal(result, tasks.size());
         return result;
     }
 
@@ -278,22 +260,12 @@ protected:
         steal_targets_.shrink_to_fit();
     }
 
-
-    ~UThreadPrimary() override {
-        /**
-         * 在开启展示宏的时候，会在主线程退出的时候，打印相关内容
-         * 默认情况下，不会开启
-         */
-        metrics_.show("thread" + std::to_string(index_));
-    }
-
 private:
-    CInt index_;                                                   // 线程index
-    CInt cur_empty_epoch_ = 0;                                     // 当前空转的轮数信息
-    UWorkStealingQueue<UTask> primary_queue_;                      // 内部队列信息
-    UWorkStealingQueue<UTask> secondary_queue_;                    // 第二个队列，用于减少触锁概率，提升性能
-    std::vector<UThreadPrimary *>* pool_threads_;                  // 用于存放线程池中的线程信息
-    std::vector<CInt> steal_targets_;                              // 被偷的目标信息
+    CInt index_ { 0 };                                                // 线程index
+    std::atomic<CInt> cur_empty_epoch_ { 0 };                      // 当前空转的轮数信息
+    UWorkStealingQueue<UTask> wsq_ {};                                // 内部队列信息
+    std::vector<UThreadPrimary *>* pool_threads_ {};                  // 用于存放线程池中的线程信息
+    std::vector<CInt> steal_targets_ {};                              // 被偷的目标信息
 
     friend class UThreadPool;
     friend class CAllocator;

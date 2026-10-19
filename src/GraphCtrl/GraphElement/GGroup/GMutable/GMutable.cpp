@@ -13,6 +13,7 @@ CGRAPH_NAMESPACE_BEGIN
 GMutable::GMutable() {
     element_type_ = GElementType::MUTABLE;
     session_ = URandom<>::generateSession(CGRAPH_STR_MUTABLE);
+    binding_index_ = CGRAPH_TRIGGER_ALL_THREAD_STRATEGY;
     manager_ = CGRAPH_SAFE_MALLOC_COBJECT(GElementManager)
 }
 
@@ -25,7 +26,6 @@ GMutable::~GMutable() {
 CStatus GMutable::init() {
     CGRAPH_FUNCTION_BEGIN
     CGRAPH_ASSERT_NOT_NULL(manager_)
-    manager_->setThreadPool(thread_pool_);
     status = manager_->initEngine();
     CGRAPH_FUNCTION_CHECK_STATUS
 
@@ -43,17 +43,17 @@ CStatus GMutable::run() {
      * 3. 通过 manager 执行
      */
     setup();
-    status = reshape(group_elements_arr_);
+    status = reshape(children_);
     CGRAPH_FUNCTION_CHECK_STATUS
 
-    status = manager_->process({group_elements_arr_.begin(), group_elements_arr_.end()});
+    status = manager_->process({children_.begin(), children_.end()});
     CGRAPH_FUNCTION_END
 }
 
 
 CStatus GMutable::destroy() {
     CGRAPH_FUNCTION_BEGIN
-    for (auto* element : group_elements_arr_) {
+    for (auto* element : children_) {
         // 链路中，可能会将部分内容设置为 visible 的信息。这里统一恢复一下
         element->setVisible(true);
     }
@@ -69,8 +69,15 @@ CBool GMutable::isSerializable() const {
 }
 
 
-CVoid GMutable::setup() {
-    for (auto* element : group_elements_arr_) {
+GElementPtr GMutable::setThreadPoolEx(UThreadPoolPtr ptr) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(manager_, ptr)
+    manager_->setThreadPool(ptr);
+    return this;
+}
+
+
+CVoid GMutable::setup() const {
+    for (auto* element : children_) {
         element->run_before_.clear();
         element->dependence_.clear();
         element->setLoop(1);

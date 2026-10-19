@@ -13,10 +13,10 @@
 
 CGRAPH_NAMESPACE_BEGIN
 
-const static CSize CGRAPH_DEFAULT_LOOP_TIMES = 1;               // 默认循环次数信息
-const static CLevel CGRAPH_DEFAULT_ELEMENT_LEVEL = 0;           // 默认的element级别，用于控制init函数
-const static CIndex CGRAPH_DEFAULT_BINDING_INDEX = -1;          // 默认绑定线程id，-1表示不绑定
-const static CMSec CGRAPH_DEFAULT_ELEMENT_TIMEOUT = 0;          // 默认element的超时时间
+const static CSize CGRAPH_DEFAULT_LOOP_TIMES = 1;                                     // 默认循环次数信息
+const static CLevel CGRAPH_DEFAULT_ELEMENT_LEVEL = 0;                                 // 默认的element级别，用于控制init函数
+const static CMSec CGRAPH_DEFAULT_ELEMENT_TIMEOUT = 0;                                // 默认element的超时时间
+const static CIndex CGRAPH_DEFAULT_BINDING_INDEX = CGRAPH_DEFAULT_TASK_STRATEGY;      // 默认绑定线程id，-1表示不绑定
 
 enum class GElementType {
     ELEMENT = 0x00000000,                    // 元素
@@ -39,7 +39,7 @@ enum class GElementType {
 enum class GElementState {
     NORMAL = 0x0000,                          // 正常状态
     CANCEL = 0x1001,                          // 取消状态
-    YIELD = 0x1002,                           // 暂停状态
+    SUSPEND = 0x1002,                         // 暂停状态（同 v3.0.0版本之前的 YIELD 含义相同）
     TIMEOUT = 0x1010,                         // 超时状态
 };
 using GPipelineState = GElementState;         // pipeline 同element共享状态
@@ -57,6 +57,7 @@ enum class GElementShape {
     NORMAL = 0,                               // 普通的元素
     LINKABLE = 1,                             // 后继是唯一元素的情况（类似 list）
     ROOT = 2,                                 // 所有后继元素，只有一个前驱的情况（类似tree root）
+    TAIL = 3,                                 // 尾部节点
 };
 CGRAPH_INTERNAL_NAMESPACE_END
 

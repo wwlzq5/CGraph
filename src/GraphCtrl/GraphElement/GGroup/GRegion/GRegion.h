@@ -28,7 +28,7 @@ public:
      * 修剪冗余的连边信息
      * @return
      */
-    CSize trim();
+    CSize trim() const;
 
 protected:
     explicit GRegion();
@@ -38,16 +38,14 @@ protected:
     CStatus run() final;
     CStatus destroy() final;
 
-    CStatus addElement(GElementPtr element) final;
-
 private:
     CVoid dump(std::ostream& oss) final;
 
     CBool isSerializable() const final;
 
-    CStatus addManagers(GParamManagerPtr paramManager,
-                        GEventManagerPtr eventManager,
-                        GStageManagerPtr stageManager) final;
+    CStatus addElementEx(GElementPtr element) final;
+
+    GElementPtr setThreadPoolEx(UThreadPoolPtr ptr) final;
 
     CBool isSeparate(GElementCPtr a, GElementCPtr b) const final;
 
@@ -58,6 +56,7 @@ private:
 
     friend class GPipeline;
     friend class CAllocator;
+    friend class GStorageFactory;
     friend class GTrimOptimizer;
 };
 

@@ -12,8 +12,15 @@
 .vscode/
 /.cache/
 /bazel-*
-/MODULE.bazel
 /MODULE.bazel.lock
 /python/build
+<<<<<<< HEAD
 /bin*/
+
+/python/dist
+/python/PyCGraph.egg-info
+/python/src
+__pycache__
+.claude
+.codegraph
 

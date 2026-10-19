@@ -12,9 +12,11 @@ CGRAPH_NAMESPACE_BEGIN
 
 CStatus GEventManager::init() {
     CGRAPH_FUNCTION_BEGIN
-    for (auto& iter : events_map_) {
+    for (const auto& iter : events_map_) {
         // fatInit 中包含了init()，和部分其他逻辑
-        status += (iter.second)->fatInit();
+        auto event = iter.second;
+        event->setGParamManager(param_manager_);
+        status += event->fatInit();
     }
     CGRAPH_FUNCTION_END
 }
@@ -22,7 +24,7 @@ CStatus GEventManager::init() {
 
 CStatus GEventManager::destroy() {
     CGRAPH_FUNCTION_BEGIN
-    for (auto& iter : events_map_) {
+    for (const auto& iter : events_map_) {
         status += (iter.second)->fatDestroy();
     }
     CGRAPH_FUNCTION_END
@@ -84,6 +86,17 @@ CStatus GEventManager::reset() {
     for (auto& iter : events_map_) {
         iter.second->asyncWait(GEventAsyncStrategy::PIPELINE_RUN_FINISH);
     }
+    CGRAPH_FUNCTION_END
+}
+
+
+CStatus GEventManager::__create_4expose(GEventPtr event, const std::string& key) {
+    CGRAPH_FUNCTION_BEGIN
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(event)
+    CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(events_map_.find(key) != events_map_.end(),
+                                            "event key [" + key + "] duplicate.");
+
+    events_map_[key] = event;
     CGRAPH_FUNCTION_END
 }
 

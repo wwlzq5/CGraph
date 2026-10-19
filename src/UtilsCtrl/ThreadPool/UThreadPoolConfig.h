@@ -11,7 +11,6 @@
 
 #include <algorithm>
 
-#include "UThreadObject.h"
 #include "UThreadPoolDefine.h"
 
 CGRAPH_NAMESPACE_BEGIN
@@ -25,6 +24,7 @@ struct UThreadPoolConfig : public CStruct {
     CInt max_local_batch_size_ = CGRAPH_MAX_LOCAL_BATCH_SIZE;
     CInt max_pool_batch_size_ = CGRAPH_MAX_POOL_BATCH_SIZE;
     CInt max_steal_batch_size_ = CGRAPH_MAX_STEAL_BATCH_SIZE;
+    CInt pipeline_wait_busy_epoch_ = CGRAPH_PIPIELINE_WAIT_BUSY_EPOCH;
     CInt primary_thread_busy_epoch_ = CGRAPH_PRIMARY_THREAD_BUSY_EPOCH;
     CMSec primary_thread_empty_interval_ = CGRAPH_PRIMARY_THREAD_EMPTY_INTERVAL;
     CSec secondary_thread_ttl_ = CGRAPH_SECONDARY_THREAD_TTL;
@@ -37,6 +37,7 @@ struct UThreadPoolConfig : public CStruct {
     CBool bind_cpu_enable_ = CGRAPH_BIND_CPU_ENABLE;
     CBool batch_task_enable_ = CGRAPH_BATCH_TASK_ENABLE;
     CBool monitor_enable_ = CGRAPH_MONITOR_ENABLE;
+    CBool deliver_running_primary_thread_enable_ = CGRAPH_DELIVER_RUNNING_PRIMARY_THREAD_ENABLE;
 
     CStatus check() const {
         CGRAPH_FUNCTION_BEGIN
@@ -62,7 +63,7 @@ protected:
      * @return
      */
     int calcStealRange() const {
-        int range = std::min(this->max_task_steal_range_, this->default_thread_size_ - 1);
+        const int range = (std::min)(this->max_task_steal_range_, this->default_thread_size_ - 1);
         return range;
     }
 

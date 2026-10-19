@@ -38,19 +38,19 @@ protected:
     /**
      * 设置pool的信息
      * @param poolTaskQueue
-     * @param poolPriorityTaskQueue
+     * @param poolLongTimeTaskQueue
      * @param config
      * @return
      */
     CStatus setThreadPoolInfo(UAtomicQueue<UTask>* poolTaskQueue,
-                              UAtomicPriorityQueue<UTask>* poolPriorityTaskQueue,
-                              UThreadPoolConfigPtr config) {
+                              UAtomicQueue<UTask>* poolLongTimeTaskQueue,
+                              const UThreadPoolConfigPtr config) {
         CGRAPH_FUNCTION_BEGIN
         CGRAPH_ASSERT_INIT(false)    // 初始化之前，设置参数
-        CGRAPH_ASSERT_NOT_NULL(poolTaskQueue, poolPriorityTaskQueue, config)
+        CGRAPH_ASSERT_NOT_NULL(poolTaskQueue, poolLongTimeTaskQueue, config)
 
         this->pool_task_queue_ = poolTaskQueue;
-        this->pool_priority_task_queue_ = poolPriorityTaskQueue;
+        this->pool_long_time_task_queue_ = poolLongTimeTaskQueue;
         this->config_ = config;
         CGRAPH_FUNCTION_END
     }
@@ -92,10 +92,13 @@ protected:
      * @return
      * @notice 目的是降低cpu的占用率
      */
-    CVoid waitRunTask(CMSec ms) {
-        auto task = this->pool_task_queue_->popWithTimeout(ms);
-        if (nullptr != task) {
-            runTask(*task);
+    CVoid waitRunTask(const CMSec ms) {
+        is_running_ = false;
+        UTask task;
+        const CBool result = pool_task_queue_->popWithTimeout(task, ms);
+        is_running_ = true;
+        if (result) {
+            runTask(task);
         }
     }
 
@@ -105,9 +108,9 @@ protected:
      * @return
      */
     bool freeze() {
-        if (likely(is_running_)) {
+        if (likely(is_running_.load(std::memory_order_relaxed))) {
             cur_ttl_++;
-            cur_ttl_ = std::min(cur_ttl_, config_->secondary_thread_ttl_);
+            cur_ttl_ = (std::min)(cur_ttl_, config_->secondary_thread_ttl_);
         } else {
             cur_ttl_--;    // 如果当前线程没有在执行，则ttl-1
         }
@@ -116,7 +119,7 @@ protected:
     }
 
 private:
-    CSec cur_ttl_ = 0;                                                      // 当前最大生存周期
+    CSec cur_ttl_ { 0 };                                                      // 当前最大生存周期
 
     friend class UThreadPool;
 };

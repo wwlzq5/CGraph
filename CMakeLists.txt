@@ -10,30 +10,46 @@ message("* * * * * * * * * * * * * * * * * * * * * * * * * * * * *")
 
 cmake_minimum_required(VERSION 3.5.0)
 
-project(CGraph VERSION 2.6.2)
+project(CGraph VERSION 3.2.5)
 
-# CGraph默认使用C++11版本，推荐使用C++17版本。暂不支持C++11以下版本
-set(CMAKE_CXX_STANDARD 11)
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+    # CGraph默认使用C++11版本，推荐使用C++17版本。暂不支持C++11以下版本
+    set(CMAKE_CXX_STANDARD 11)
+endif()
 
-option(CGRAPH_BUILD_FUNCTIONAL_TESTS "Enables builds of functional tests" OFF)
-option(CGRAPH_BUILD_PERFORMANCE_TESTS "Enables builds of performance tests" OFF)
+option(CGRAPH_BUILD_TUTORIALS "Enable build tutorials" ON)
+option(CGRAPH_BUILD_EXAMPLES "Enable build examples" ON)
+option(CGRAPH_BUILD_FUNCTIONAL_TESTS "Enable build functional tests" OFF)
+option(CGRAPH_BUILD_PERFORMANCE_TESTS "Enable build performance tests" OFF)
 
 # 如果开启此宏定义，则CGraph执行过程中，不会在控制台打印任何信息
 # add_definitions(-D_CGRAPH_SILENCE_)
 
-# 如果开启此宏定义，则在结束过程中，会展示thread pool中的调度信息
-# 本信息主要用于作者性能调优使用，不保证所有数据完全正确
-# 不建议作为验证自行逻辑的唯一标准，不建议使用者打开
-# add_definitions(-D_CGRAPH_SHOW_THREAD_METRICS_)
+# 此宏用于在读写GParam加锁的时候，加锁方式修改为读写锁的情况
+# 仅在cpp17或以上版本生效
+# 打开后会在多读少写的情况下有性能优化
+# 副作用是GParam中的锁无法递归上锁，一般情况下可忽略影响
+# add_definitions(-D_CGRAPH_GPARAM_RWLOCK_ENABLE_)
 
-# 此宏可以在纯并发的微小任务下，用于提升整体性能。主要用于在性能测试的情况下使用，一般情况不推荐打开
-# add_definitions(-D_CGRAPH_PARALLEL_MICRO_BATCH_ENABLE_)
+# 如果开启此宏定义，则执行过程中，仅正常执行 element 的 init/run/destroy 方法
+# 无 循环loop、切面aspect、退出cancel、暂停Suspend 等功能
+# 主要用于 简单场景 和 性能测试，一般情况不建议开启
+# add_definitions(-D_CGRAPH_LITE_MODE_ENABLE_)
 
 # add CGraph environment info
 include(cmake/CGraph-env-include.cmake)
 
-add_subdirectory(./tutorial)
-add_subdirectory(./example)
+# 教程相关内容
+if(CGRAPH_BUILD_TUTORIALS)
+    message(STATUS "[CGraph] build tutorials")
+    add_subdirectory(./tutorial)
+endif(CGRAPH_BUILD_TUTORIALS)
+
+# 样例相关内容
+if(CGRAPH_BUILD_EXAMPLES)
+    message(STATUS "[CGraph] build examples")
+    add_subdirectory(./example)
+endif(CGRAPH_BUILD_EXAMPLES)
 
 # 功能测试相关内容
 if(CGRAPH_BUILD_FUNCTIONAL_TESTS)

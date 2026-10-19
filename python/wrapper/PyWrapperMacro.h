@@ -1,0 +1,108 @@
+/***************************
+@Author: Chunel
+@Contact: chunel@foxmail.com
+@File: PyWrapperDefine.h
+@Time: 2025/4/6 14:48
+@Desc: 
+***************************/
+
+#ifndef CGRAPH_PYWRAPPERDEFINE_H
+#define CGRAPH_PYWRAPPERDEFINE_H
+
+#include <pybind11/pybind11.h>
+
+#include "CGraph.h"
+
+#define PYCGRAPH_DECLARE_GELEMENT_COMMON_FUNCTIONS(PCGE)    \
+    CBool isHold() override {                               \
+        PYBIND11_OVERLOAD(CBool, PCGE, isHold);             \
+    }                                                       \
+                                                            \
+    CBool isMatch() override {                              \
+        PYBIND11_OVERLOAD(CBool, PCGE, isMatch);            \
+    }                                                       \
+                                                            \
+    CStatus prepareRun() override {                         \
+        PYBIND11_OVERLOAD(CStatus, PCGE, prepareRun);       \
+    }                                                       \
+                                                            \
+    CStatus checkRunResult() override {                     \
+        PYBIND11_OVERLOAD(CStatus, PCGE, checkRunResult);   \
+    }                                                       \
+                                                            \
+
+
+#define PYCGRAPH_DECLARE_GGROUP_INTERFACE_CLASS(PCGG, PVFunc)                             \
+class PCGG##Interface : public PCGG {                                                     \
+public:                                                                                   \
+    explicit PCGG##Interface(const CGraph::GElementPtrArr& elements = CGraph::GElementPtrArr{}) : PCGG(elements) {}; \
+    ~PCGG##Interface() override = default;                                                \
+protected:                                                                                \
+    PYCGRAPH_DECLARE_GELEMENT_COMMON_FUNCTIONS(PCGG)                                      \
+    PVFunc                                                                                \
+};                                                                                        \
+                                                                                          \
+
+
+#define PYCGRAPH_DECLARE_GGROUP_PYBIND11_FUNCTIONS(module, PCGG)                          \
+    py::class_<Pyw##PCGG, GElement, Pyw##PCGG##Interface, std::unique_ptr<Pyw##PCGG, py::nodelete> >(module, #PCGG) \
+        .def(py::init<const GElementPtrArr&>(),                                           \
+            py::arg("elements") = GElementPtrArr{},                                       \
+            py::keep_alive<1, 2>())                                                       \
+        .def("addGElements", &Pyw##PCGG::__addGElements_4expose,                          \
+            py::arg("elements"),                                                          \
+            py::keep_alive<1, 2>())                                                       \
+                                                                                          \
+
+
+#define PYCGRAPH_DEF_GPARAM_PYBIND11_FUNCTIONS(PCGO)                                      \
+    def("createGParam", &PCGO::__createGParam_4expose,                                    \
+         py::arg("param"),                                                                \
+         py::arg("key"),                                                                  \
+         py::keep_alive<1, 2>(),                                                          \
+         py::call_guard<py::gil_scoped_release>())                                        \
+    .def("getGParam", &PCGO::__getGParam_4expose,                                         \
+         py::arg("key"))                                                                  \
+    .def("getGParamWithNoEmpty", &PCGO::__getGParamWithNoEmpty_4expose,                   \
+         py::arg("key"))                                                                  \
+    .def("removeGParam", &PCGO::__removeGParam_4expose,                                   \
+         py::arg("key"),                                                                  \
+         py::call_guard<py::gil_scoped_release>())                                        \
+    .def("hasGParam", &PCGO::__hasGParam_4expose,                                         \
+         py::arg("key"),                                                                  \
+         py::call_guard<py::gil_scoped_release>())                                        \
+                                                                                          \
+
+
+#define PYCGRAPH_DEF_GEVENT_PYBIND11_FUNCTIONS(PCGO)                                      \
+    def("notify", &PCGO::__notify_4expose,                                                \
+        py::arg("key"),                                                                   \
+        py::arg("type"),                                                                  \
+        py::arg("strategy") = GEventAsyncStrategy::PIPELINE_RUN_FINISH,                   \
+        py::call_guard<py::gil_scoped_release>())                                         \
+    .def("asyncNotify", &PCGO::__asyncNotify_4expose,                                     \
+        py::arg("key"),                                                                   \
+        py::arg("strategy") = GEventAsyncStrategy::PIPELINE_RUN_FINISH,                   \
+        py::call_guard<py::gil_scoped_release>())                                         \
+                                                                                          \
+
+
+// declare decorator for python
+#define PYCGRAPH_DECLARE_PYBIND11_DECORATOR(module, decoratorName, nativeName)            \
+    do {                                                                                  \
+        py::object nativeCls = (module).attr(nativeName);                                 \
+        (module).def(decoratorName,                                                       \
+            [nativeCls](py::type userCls) -> py::object {                                 \
+                auto decorated =                                                          \
+                    py::module_::import("types").attr("new_class")(                       \
+                        userCls.attr("__name__"),                                         \
+                        py::make_tuple(nativeCls, userCls));                              \
+                decorated.attr("__module__") = userCls.attr("__module__");                \
+                decorated.attr("__qualname__") = userCls.attr("__qualname__");            \
+                return decorated;                                                         \
+            }                                                                             \
+        );                                                                                \
+    } while (0)                                                                           \
+
+
+#endif //CGRAPH_PYWRAPPERDEFINE_H

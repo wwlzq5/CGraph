@@ -93,6 +93,19 @@ private:
 
     friend class GPipeline;
     friend class GElement;
+    friend class GStorage;
+
+private:
+    CStatus __create_4expose(GStagePtr stage, const std::string& key, CInt threshold) {
+        CGRAPH_FUNCTION_BEGIN
+        CGRAPH_ASSERT_NOT_NULL(stage)
+        CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(stage_map_.find(key) != stage_map_.end(),
+                                                "[" + key + "] add stage duplicate");
+        stage_map_[key] = stage;
+        stage->setGParamManager(param_manager_);
+        stage->setThreshold(threshold);
+        CGRAPH_FUNCTION_END
+    }
 };
 
 using GStageManagerPtr = GStageManager *;

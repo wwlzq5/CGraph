@@ -27,11 +27,10 @@ public:
      * 创建一个特定类型的参数
      * @tparam T
      * @param key
-     * @param backtrace 是否开启记录调用链路功能
      * @return
      */
     template<typename T, c_enable_if_t<std::is_base_of<GParam, T>::value, int> = 0>
-    CStatus create(const std::string& key, CBool backtrace = false);
+    CStatus create(const std::string& key);
 
     /**
      * 获取一个特定类型的参数
@@ -67,14 +66,14 @@ protected:
      * 初始化所有的参数信息
      * @return
      */
-    CStatus setup();
+    CStatus setup() const;
 
     /**
      * 重置所有的GParam信息
      * @param curStatus
      * @return
      */
-    CVoid resetWithStatus(const CStatus& curStatus);
+    CVoid resetWithStatus(const CStatus& curStatus) const;
 
     CGRAPH_NO_ALLOWED_COPY(GParamManager)
 
@@ -84,12 +83,14 @@ private:
 
     friend class GPipeline;
     friend class CAllocator;
+    friend class GStorage;
 
 public:
     /// 为 python 版本设定的函数，cpp 的童鞋不需要使用
-    CStatus __create_4py(GParamPtr param, const std::string& key);
-
-    GParamPtr __get_4py(const std::string& key);
+    CStatus __create_4expose(GParamPtr param, const std::string& key);
+    GParamPtr __get_4expose(const std::string& key);
+    CStatus __remove_4expose(const std::string& key);
+    CBool __has_4expose(const std::string& key);
 };
 
 using GParamManagerPtr = GParamManager *;

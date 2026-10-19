@@ -32,16 +32,25 @@ public:
     explicit CSTATUS() = default;
 
     explicit CSTATUS(const std::string &errorInfo) {
-        this->error_code_ = STATUS_ERR;    // 默认的error code信息
-        this->error_info_ = errorInfo;
+        if (!errorInfo.empty()) {
+            this->error_code_ = STATUS_ERR;    // 默认的error code信息
+            this->error_info_ = errorInfo;
+        }
     }
 
-    explicit CSTATUS(int errorCode, const std::string &errorInfo) {
+    explicit CSTATUS(const int errorCode, const std::string& errorInfo) {
         this->error_code_ = errorCode;
         this->error_info_ = errorInfo;
     }
 
-    CSTATUS(const CSTATUS &status) {
+    explicit CSTATUS(const int errorCode) {
+        this->error_code_ = errorCode;
+        if (errorCode < STATUS_OK) {
+            this->error_info_ = CGRAPH_DEFAULT_ERROR_INFO;
+        }
+    }
+
+    CSTATUS(const CSTATUS& status) {
         if (status.error_code_ == error_code_) {
             return;
         }
@@ -50,7 +59,7 @@ public:
         this->error_info_ = status.error_info_;
     }
 
-    CSTATUS(const CSTATUS &&status) noexcept {
+    CSTATUS(const CSTATUS&& status) noexcept {
         if (status.error_code_ == error_code_) {
             return;
         }
@@ -79,6 +88,10 @@ public:
         }
 
         return (*this);
+    }
+
+    explicit operator bool() const {
+        return this->isOK();
     }
 
     /**
@@ -124,6 +137,14 @@ public:
     }
 
     /**
+     * 没有异常。包含 > 0 的警告类型
+     * @return
+     */
+    bool isNotErr() const {
+        return error_code_ >= STATUS_OK;
+    }
+
+    /**
      * 判断当前状态是否是崩溃了
      * @return
      */
@@ -137,7 +158,7 @@ public:
      * @param info
      * @return
      */
-    CSTATUS* setInfo(int code, const std::string& info) {
+    CSTATUS* setInfo(const int code, const std::string& info) {
         error_code_ = code;
         error_info_ = (STATUS_OK == error_code_) ? CGRAPH_EMPTY : info;
         return this;
@@ -155,8 +176,8 @@ public:
     }
 
 private:
-    int error_code_ = STATUS_OK;                     // 错误码信息
-    std::string error_info_;                         // 错误信息描述
+    int error_code_ { STATUS_OK };                     // 错误码信息
+    std::string error_info_;                           // 错误信息描述
 };
 
 CGRAPH_INTERNAL_NAMESPACE_END

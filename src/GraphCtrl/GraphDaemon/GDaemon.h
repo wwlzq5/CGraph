@@ -45,9 +45,14 @@ private:
 
     friend class GDaemonManager;
     friend class GPipeline;
+    friend class GStorage;
 
 private:
     UTimer timer_;                              // 计时器
+
+
+CGRAPH_INTERNAL_ACCESS:
+    CMSec __getInterval_4expose() const;
 };
 
 using GDaemonPtr = GDaemon *;

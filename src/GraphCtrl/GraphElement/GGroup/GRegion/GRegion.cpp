@@ -11,11 +11,11 @@
 
 CGRAPH_NAMESPACE_BEGIN
 
-GRegion::GRegion() : GGroup() {
-    is_init_ = false;
-    manager_ = CGRAPH_SAFE_MALLOC_COBJECT(GElementManager)
+GRegion::GRegion() {
     element_type_ = GElementType::REGION;
+    binding_index_ = CGRAPH_TRIGGER_ALL_THREAD_STRATEGY;
     session_ = URandom<>::generateSession(CGRAPH_STR_REGION);
+    manager_ = CGRAPH_SAFE_MALLOC_COBJECT(GElementManager)
 }
 
 
@@ -27,10 +27,8 @@ GRegion::~GRegion() {
 CStatus GRegion::init() {
     CGRAPH_FUNCTION_BEGIN
     // 在这里将初始化所有的节点信息，并且实现分析，联通等功能
-    CGRAPH_ASSERT_NOT_NULL(thread_pool_, manager_)
+    CGRAPH_ASSERT_NOT_NULL(manager_)
 
-    // 在region中，需要专门的调度逻辑
-    this->manager_->setThreadPool(thread_pool_);
     status = this->manager_->init();
     CGRAPH_FUNCTION_CHECK_STATUS
 
@@ -59,13 +57,19 @@ CStatus GRegion::run() {
 }
 
 
-CStatus GRegion::addElement(GElementPtr element) {
+CStatus GRegion::addElementEx(GElementPtr element) {
     CGRAPH_FUNCTION_BEGIN
     CGRAPH_ASSERT_NOT_NULL(element, manager_)
 
     manager_->manager_elements_.emplace(element);
-    status = GGroup::addElement(element);
     CGRAPH_FUNCTION_END
+}
+
+
+GElementPtr GRegion::setThreadPoolEx(UThreadPoolPtr ptr) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(manager_, ptr)
+    manager_->setThreadPool(ptr);
+    return this;
 }
 
 
@@ -105,31 +109,12 @@ CBool GRegion::isSerializable() const {
 }
 
 
-CStatus GRegion::addManagers(GParamManagerPtr paramManager,
-                             GEventManagerPtr eventManager,
-                             GStageManagerPtr stageManager) {
-    CGRAPH_FUNCTION_BEGIN
-    CGRAPH_ASSERT_INIT(false)
-    CGRAPH_ASSERT_NOT_NULL(paramManager, eventManager, stageManager)
-
-    this->setGParamManager(paramManager);
-    this->setGEventManager(eventManager);
-    this->setGStageManager(stageManager);
-    for (auto* cur : manager_->manager_elements_) {
-        CGRAPH_ASSERT_NOT_NULL(cur)
-        status += cur->addManagers(paramManager, eventManager, stageManager);
-    }
-
-    CGRAPH_FUNCTION_END
-}
-
-
 CBool GRegion::isSeparate(GElementCPtr a, GElementCPtr b) const {
     return GSeparateOptimizer::checkSeparate(manager_->manager_elements_, a, b);
 }
 
 
-CSize GRegion::trim() {
+CSize GRegion::trim() const {
     CGRAPH_ASSERT_INIT_THROW_ERROR(false)
     CSize result = 0;
     if (manager_) {

@@ -61,7 +61,6 @@ protected:
 
     /**
      * 构造执行引擎
-     * @param strategy
      * @return
      */
     CStatus initEngine();
@@ -77,13 +76,13 @@ protected:
      * 获取最大的并发数
      * @return
      */
-    CSize calcMaxParaSize();
+    CSize calcMaxParaSize() const;
 
     /**
      * 查看是否可以串行执行
      * @return
      */
-    CBool checkSerializable();
+    CBool checkSerializable() const;
 
     /**
      * 剪裁多余的连边信息
@@ -108,10 +107,12 @@ private:
     friend class GRegion;
     friend class GMutable;
     friend class GPerf;
+    friend class GElementRepository;
     friend class CAllocator;
 };
 
 using GElementManagerPtr = GElementManager *;
+using GElementManagerCPtr = const GElementManagerPtr;
 
 CGRAPH_NAMESPACE_END
 

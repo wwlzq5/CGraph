@@ -102,7 +102,7 @@ public:
 
     /**
      * 设定绑定的线程id
-     * @param index，需要绑定的 thread id 信息
+     * @param index 需要绑定的 thread id 信息
      * @return
      * @notice 本接口仅保证绑定线程优先调度，但不保证最终一定在绑定线程上执行。若不了解调度机制，不建议使用本接口，否则可能导致运行时阻塞。
      */
@@ -149,12 +149,24 @@ public:
     GElementState getCurState() const;
 
     /**
+     * 获取loop值信息
+     * @return
+     */
+    CSize getLoop() const;
+
+    /**
      * 删除一个依赖的节点信息
      * @param element
      * @return
      * @notice 删除依赖关系之后，可能会出现 dag 无法连通的情况
      */
     CStatus removeDepend(GElement* element);
+
+    /**
+     * 获取当前节点的相关关系信息，包含前驱、后继、从属关系、包含元素
+     * @return
+     */
+    GElementRelation getRelation() const;
 
     /**
      * 实现连续注册的语法糖，形如：
@@ -213,7 +225,7 @@ protected:
      * @param ex
      * @return
      */
-    CStatus crashed(const CException& ex);
+    CStatus crashed(const CException& ex) const;
 
     /**
      * 获取当前element内部参数
@@ -230,7 +242,7 @@ protected:
      * @return
      * @notice 启动线程返回-1（CGRAPH_MAIN_THREAD_ID），辅助线程返回-2（CGRAPH_SECONDARY_THREAD_COMMON_ID），主线程返回 线程index
      */
-    CIndex getThreadIndex();
+    CIndex getThreadIndex() const;
 
     /**
      * 判断当前是否超时
@@ -244,12 +256,6 @@ protected:
      * @notice 不同的group类型，获取 binding index 的方式不同
      */
     CIndex getBindingIndex() const;
-
-    /**
-     * 获取当前节点的相关关系信息，包含前驱、后继、从属关系
-     * @return
-     */
-    GElementRelation getRelation() const;
 
     CGRAPH_NO_ALLOWED_COPY(GElement);
 
@@ -294,7 +300,7 @@ private:
      * @return
      */
     CStatus doAspect(const internal::GAspectType& aspectType,
-                     const CStatus& curStatus = CStatus());
+                     const CStatus& curStatus = CStatus()) const;
 
     /**
      * 设置element信息
@@ -332,6 +338,12 @@ private:
     GElement* setThreadPool(UThreadPoolPtr ptr);
 
     /**
+     * 设置线程池信息，供个别有 manager 的 group使用
+     * @return
+     */
+    virtual GElement* setThreadPoolEx(UThreadPoolPtr ptr);
+
+    /**
      * graphviz dump 逻辑
      * @param oss
      * @return
@@ -360,20 +372,20 @@ private:
      * @param oss
      * @return
      */
-    CVoid dumpElementHeader(std::ostream& oss);
+    CVoid dumpElementHeader(std::ostream& oss) const;
 
     /**
      * graphviz dump perf逻辑
      * @param oss
      * @return
      */
-    CVoid dumpPerfInfo(std::ostream& oss);
+    CVoid dumpPerfInfo(std::ostream& oss) const;
 
     /**
-     * 判断是否进入 yield状态。如果是的话，则等待恢复。未进入yield状态，则继续运行
+     * 判断是否进入 suspend 状态。如果是的话，则等待恢复。未进入 suspend 状态，则继续运行
      * @return
      */
-    CVoid checkYield();
+    CVoid checkSuspend();
 
     /**
      * 判断当前元素，是否可以线性执行。默认返回true
@@ -418,13 +430,20 @@ private:
      */
     CBool isDefaultBinding() const;
 
+    /**
+     * 更新切面信息
+     * @return
+     */
+    GElement* updateAspectInfo();
+
+
 private:
     /** 状态相关信息 */
-    CBool done_ { false };                                                    // 判定被执行结束
+    std::atomic<CBool> done_ { false };                                    // 判定被执行结束
     CBool visible_ { true };                                                  // 判定可见的，如果被删除的话，则认为是不可见的
     CBool is_init_ { false };                                                 // 判断是否init
     GElementType element_type_ { GElementType::ELEMENT };                     // 用于区分element 内部类型
-    std::atomic<GElementState> cur_state_ { GElementState::NORMAL };          // 当前执行状态
+    std::atomic<GElementState> cur_state_ { GElementState::NORMAL };       // 当前执行状态
     internal::GElementShape shape_ { internal::GElementShape::NORMAL };       // 元素位置类型
 
     /** 配置相关信息 */
@@ -436,22 +455,23 @@ private:
     CBool is_marco_ { false };                                                // 微任务
 
     /** 执行期间相关信息 */
-    GElementParamMap local_params_;                                           // 用于记录当前element的内部参数
+    GElementParamMap local_params_ {};                                        // 用于记录当前element的内部参数
     GAspectManagerPtr aspect_manager_ { nullptr };                            // 整体流程的切面管理类
     UThreadPoolPtr thread_pool_ { nullptr };                                  // 用于执行的线程池信息
     GPerfInfo* perf_info_ { nullptr };                                        // 用于perf的信息
+    UTask run_task_ {};                                                       // 用于记录 调度执行函数
     CBool is_prepared_ { false };                                             // 判断是否已经执行过 prepareRun() 方法
 
     /** 图相关信息 */
-    std::atomic<CSize> left_depend_ { 0 };                                    // 当 left_depend_ 值为0的时候，即可以执行该element信息
+    std::atomic<CSize> left_depend_ { 0 };                                 // 当 left_depend_ 值为0的时候，即可以执行该element信息
     USmallVector<GElement *> run_before_ {};                                  // 被依赖的节点（后继）
     USmallVector<GElement *> dependence_ {};                                  // 依赖的节点信息（前驱）
     GElement* belong_ { nullptr };                                            // 从属的element 信息，如为nullptr，则表示从属于 pipeline
+    std::vector<GElement *> children_ {};                                     // 子节点，适用于group类型
 
     /** 异步执行相关信息 */
-    std::future<CStatus> async_result_;                                       // 用于记录当前节点的异步执行情况
-    std::mutex yield_mutex_;                                                  // 控制停止执行的锁
-    std::condition_variable yield_cv_;                                        // 控制停止执行的条件变量
+    std::future<CStatus> async_result_ {};                                    // 用于记录当前节点的异步执行情况
+    UCvMutex suspend_locker_ {};                                              // 控制停止执行锁信息
 
     friend class GNode;
     friend class GGroup;
@@ -459,7 +479,7 @@ private:
     friend class GRegion;
     friend class GCondition;
     friend class GMutable;
-    template<CInt> friend class GSome;
+    friend class GSome;
     template<GMultiConditionType> friend class GMultiCondition;
     friend class GPipeline;
     friend class GElementManager;
@@ -480,18 +500,22 @@ private:
     friend class GSeparateOptimizer;
     friend class GElementRepository;
     friend class GPerf;
+    friend class GStorage;
+    friend struct _GElementStorage;
 
     CGRAPH_DECLARE_GPARAM_MANAGER_WRAPPER_WITH_MEMBER
     CGRAPH_DECLARE_GEVENT_MANAGER_WRAPPER_WITH_MEMBER
     CGRAPH_DECLARE_GSTAGE_MANAGER_WRAPPER_WITH_MEMBER
 
-public:
-    /// 以下函数功能，仅供py版本使用
-    CStatus __createGParam_4py(GParamPtr param, const std::string& key);
-    GParamPtr __getGParam_4py(const std::string& key);
+CGRAPH_INTERNAL_ACCESS:
+    GElement* __addGAspect_4expose(GAspectPtr aspect);
+    CStatus __waitGStage_4expose(const std::string& key);
+    CBool __isTimeout_4expose();
+    std::string __str_4expose();
 };
 
 using GElementRef = GElement &;
+using GElementCRef = const GElement &;
 using GElementPtr = GElement *;
 using GElementCPtr = const GElement *;
 using GElementPPtr = GElementPtr *;

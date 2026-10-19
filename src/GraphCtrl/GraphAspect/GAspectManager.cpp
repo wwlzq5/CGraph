@@ -21,7 +21,7 @@ GAspectManager::~GAspectManager() {
 
 
 CStatus GAspectManager::reflect(const internal::GAspectType &type,
-                                const CStatus &curStatus) {
+                                const CStatus &curStatus) const {
     CGRAPH_FUNCTION_BEGIN
 
     for (GAspectPtr aspect : aspect_arr_) {
@@ -30,25 +30,28 @@ CStatus GAspectManager::reflect(const internal::GAspectType &type,
              * 仅针对Begin对应的内容，进行返回值判断
              * run()方法切面更容易被执行，故放在最前方判断
              */
-            case internal::GAspectType::BEGIN_RUN :
+            case internal::GAspectType::BEGIN_RUN:
                 status = aspect->beginRun();
                 break;
-            case internal::GAspectType::FINISH_RUN :
+            case internal::GAspectType::FINISH_RUN:
                 aspect->finishRun(curStatus);
                 break;
-            case internal::GAspectType::BEGIN_INIT :
+            case internal::GAspectType::BEGIN_INIT:
                 status = aspect->beginInit();
                 break;
-            case internal::GAspectType::FINISH_INIT :
+            case internal::GAspectType::FINISH_INIT:
                 aspect->finishInit(curStatus);
                 break;
-            case internal::GAspectType::BEGIN_DESTROY :
+            case internal::GAspectType::BEGIN_DESTROY:
                 status = aspect->beginDestroy();
                 break;
-            case internal::GAspectType::FINISH_DESTROY :
+            case internal::GAspectType::FINISH_DESTROY:
                 aspect->finishDestroy(curStatus);
                 break;
-            case internal::GAspectType::ENTER_CRASHED :
+            case internal::GAspectType::ENTER_TIMEOUT:
+                aspect->enterTimeout();
+                break;
+            case internal::GAspectType::ENTER_CRASHED:
                 aspect->enterCrashed();
                 break;
             default:
@@ -99,6 +102,7 @@ CStatus GAspectManager::popLast() {
 
 
 CVoidPtr GAspectManager::setGParamManager(GParamManagerPtr pm) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(pm)
     for (auto *cur: aspect_arr_) {
         cur->setGParamManager(pm);
     }
@@ -107,8 +111,17 @@ CVoidPtr GAspectManager::setGParamManager(GParamManagerPtr pm) {
 
 
 CVoidPtr GAspectManager::setGEventManager(GEventManagerPtr em) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(em)
     for (auto *cur : aspect_arr_) {
         cur->setGEventManager(em);
+    }
+    return this;
+}
+
+CVoidPtr GAspectManager::setBelong(GElement* belong) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(belong)
+    for (auto *cur : aspect_arr_) {
+        cur->belong_ = belong;
     }
     return this;
 }

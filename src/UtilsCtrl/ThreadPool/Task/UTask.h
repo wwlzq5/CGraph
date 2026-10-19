@@ -10,7 +10,7 @@
 #define CGRAPH_UTASK_H
 
 #include <vector>
-#include <memory>
+#include <utility>
 #include <type_traits>
 
 #include "../UThreadObject.h"
@@ -27,47 +27,75 @@ class UTask : public CStruct {
     // 退化以获得实际类型，修改思路参考：https://github.com/ChunelFeng/CThreadPool/pull/3
     template<typename F, typename T = typename std::decay<F>::type>
     struct TaskDerided : TaskBased {
-        T func_;
+        T func_ {};
         explicit TaskDerided(F&& func) : func_(std::forward<F>(func)) {}
         CVoid call() final { func_(); }
     };
 
 public:
-    template<typename F>
-    UTask(F&& func, int priority = 0)
-        : impl_(new TaskDerided<F>(std::forward<F>(func)))
-        , priority_(priority) {}
-
-    CVoid operator()() {
-        // impl_ 理论上不可能为空
-        impl_->call();
+    template<typename F,
+        typename std::enable_if<!std::is_same<typename std::decay<F>::type, UTask>::value, int>::type = 0>
+    explicit UTask(F&& func, const CBool owner = true)
+        : impl_(new TaskDerided<F>(std::forward<F>(func))),
+          owner_(owner) {
     }
 
-    UTask() = default;
+    CVoid operator()() const {
+        if (likely(impl_)) {
+            impl_->call();
+        }
+    }
+
+    explicit UTask() = default;
+
+    explicit UTask(const UTask* task) {
+        if (likely(task)) {
+            impl_ = task->impl_;
+            owner_ = false;
+        }
+    }
+
+    explicit UTask(UTask* task) {
+        if (likely(task)) {
+            impl_ = task->impl_;
+            owner_ = false;
+        }
+    }
+
+    ~UTask() override {
+        if (owner_) {
+            CGRAPH_DELETE_PTR(impl_);
+        }
+    }
 
     UTask(UTask&& task) noexcept:
-            impl_(std::move(task.impl_)),
-            priority_(task.priority_) {}
+            impl_(task.impl_),
+            owner_(task.owner_) {
+        task.impl_ = nullptr;
+        task.owner_ = false;
+    }
 
-    UTask &operator=(UTask&& task) noexcept {
-        impl_ = std::move(task.impl_);
-        priority_ = task.priority_;
+    UTask& operator=(UTask&& task) noexcept {
+        if (this != &task) {
+            if (owner_) {
+                CGRAPH_DELETE_PTR(impl_);
+            }
+
+            impl_ = task.impl_;
+            owner_ = task.owner_;
+
+            task.impl_ = nullptr;
+            task.owner_ = false;
+        }
+
         return *this;
-    }
-
-    CBool operator>(const UTask& task) const {
-        return priority_ < task.priority_;    // 新加入的，放到后面
-    }
-
-    CBool operator<(const UTask& task) const {
-        return priority_ >= task.priority_;
     }
 
     CGRAPH_NO_ALLOWED_COPY(UTask)
 
 private:
-    std::unique_ptr<TaskBased> impl_ = nullptr;
-    CInt priority_ = 0;                                 // 任务的优先级信息
+    TaskBased* impl_ { nullptr };
+    CBool owner_ { true };                                // impl_ 是否归属当前对象
 };
 
 

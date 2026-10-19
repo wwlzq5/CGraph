@@ -9,13 +9,23 @@
 #ifndef CGRAPH_PYWRAPPERINCLUDE_H
 #define CGRAPH_PYWRAPPERINCLUDE_H
 
-#include "PyGPipeline.h"
+#include "PywGFence.h"
+#include "PywGFunction.h"
 #include "PywGElement.h"
 #include "PywGNode.h"
-#include "PyGCluster.h"
-#include "PyGRegion.h"
+#include "PywGCluster.h"
+#include "PywGRegion.h"
 #include "PywGCondition.h"
-#include "PyGMultiCondition.h"
 #include "PywGParam.h"
+#include "PywGAspect.h"
+#include "PywGEvent.h"
+#include "PywGDaemon.h"
+#include "PywGStage.h"
+#include "PywGParallelMultiCondition.h"
+#include "PywGSerialMultiCondition.h"
+#include "PywGSome.h"
+#include "PywGMutable.h"
+#include "PywGPassedParam.h"
+#include "PywGPipelineDeleter.h"
 
 #endif //CGRAPH_PYWRAPPERINCLUDE_H

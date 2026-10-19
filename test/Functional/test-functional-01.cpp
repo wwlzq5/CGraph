@@ -29,7 +29,7 @@ void test_functional_01() {
 
     {
         UTimeCounter counter("test_functional_01");
-        status = pipeline->process(runTimes);
+        status += pipeline->process(runTimes);
     }
 
     if (status.isErr()) {

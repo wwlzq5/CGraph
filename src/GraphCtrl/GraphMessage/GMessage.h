@@ -20,8 +20,10 @@ template<typename T, CUInt capacity = CGRAPH_DEFAULT_RINGBUFFER_SIZE,
         c_enable_if_t<std::is_base_of<GMessageParam, T>::value, int> = 0>
 class GMessage : public GMessageObject {
 public:
-    explicit GMessage(CUInt size = capacity) {
+    explicit GMessage(CUInt size = capacity,
+        const CIndex connId = 0) {
         queue_.setCapacity(size);
+        conn_id_ = connId;
     }
 
     /**
@@ -29,19 +31,6 @@ public:
      */
     ~GMessage() override {
         queue_.clear();
-    }
-
-    /**
-     * 写入参数
-     * @tparam TImpl
-     * @param value
-     * @param strategy
-     * @return
-     */
-    template<class TImpl,
-            c_enable_if_t<std::is_base_of<T, TImpl>::value, int> = 0>
-    CVoid send(const TImpl& value, GMessagePushStrategy strategy) {
-        queue_.push(value, strategy);
     }
 
     /**
@@ -53,20 +42,8 @@ public:
      */
     template<class TImpl,
             c_enable_if_t<std::is_base_of<T, TImpl>::value, int> = 0>
-    CVoid send(std::unique_ptr<TImpl>& value, GMessagePushStrategy strategy) {
+    CVoid send(const std::shared_ptr<TImpl>& value, GMessagePushStrategy strategy) {
         queue_.push(value, strategy);
-    }
-
-    /**
-     * 获取参数
-     * @param value
-     * @param timeout
-     * @return
-     */
-    template<class TImpl,
-            c_enable_if_t<std::is_base_of<T, TImpl>::value, int> = 0>
-    CStatus recv(TImpl& value, CMSec timeout) {
-        return queue_.waitPopWithTimeout(value, timeout);
     }
 
     /**
@@ -78,7 +55,7 @@ public:
      */
     template<class TImpl,
             c_enable_if_t<std::is_base_of<T, TImpl>::value, int> = 0>
-    CStatus recv(std::unique_ptr<TImpl>& value, CMSec timeout) {
+    CStatus recv(std::shared_ptr<TImpl>& value, CMSec timeout) {
         return queue_.waitPopWithTimeout(value, timeout);
     }
 
@@ -90,8 +67,17 @@ public:
         return queue_.getCapacity();
     }
 
+    /**
+     * 获取 connId 信息
+     * @return
+     */
+    CIndex getConnId() const {
+        return conn_id_;
+    }
+
 private:
-    UAtomicRingBufferQueue<T, capacity> queue_;
+    UAtomicRingBufferQueue<T, capacity> queue_ {};
+    CIndex conn_id_ {0};                            // 用于记录message的唯一标识，用于 pub-sub场景
 };
 
 

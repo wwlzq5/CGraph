@@ -26,12 +26,11 @@ public:
     CVoid push(T&& value) {
         while (true) {
             if (mutex_.try_lock()) {
-                deque_.emplace_back(std::forward<T>(value));
+                deque_.emplace_back(std::move(value));
                 mutex_.unlock();
                 break;
-            } else {
-                CGRAPH_YIELD();
             }
+            CGRAPH_YIELD();
         }
     }
 
@@ -40,14 +39,14 @@ public:
      * 有条件的写入数据信息
      * @param value
      * @param enable
-     * @param state
+     * @param lockable
      * @return
      */
-    CVoid push(T&& value, CBool enable, CBool lockable) {
+    CVoid push(T&& value, const CBool enable, const CBool lockable) {
         if (enable && lockable) {
             mutex_.lock();
         }
-        deque_.emplace_back(std::forward<T>(value));
+        deque_.emplace_back(std::move(value));
         if (enable && !lockable) {
             mutex_.unlock();
         }
@@ -62,30 +61,11 @@ public:
     CBool tryPush(T&& value) {
         CBool result = false;
         if (mutex_.try_lock()) {
-            deque_.emplace_back(std::forward<T>(value));
+            deque_.emplace_back(std::move(value));
             mutex_.unlock();
             result = true;
         }
         return result;
-    }
-
-
-    /**
-     * 向队列中写入信息
-     * @param values
-     */
-    CVoid push(const std::vector<T>& values) {
-        while (true) {
-            if (mutex_.try_lock()) {
-                for (auto& value : values) {
-                    deque_.emplace_back(value);
-                }
-                mutex_.unlock();
-                break;
-            } else {
-                CGRAPH_YIELD();
-            }
-        }
     }
 
 
@@ -99,7 +79,7 @@ public:
         bool result = false;
         if (!deque_.empty() && mutex_.try_lock()) {
             if (!deque_.empty()) {
-                value = std::forward<T>(deque_.front());    // 从前方弹出
+                value = std::move(deque_.front());    // 从前方弹出
                 deque_.pop_front();
                 result = true;
             }
@@ -120,7 +100,7 @@ public:
         bool result = false;
         if (!deque_.empty() && mutex_.try_lock()) {
             while (!deque_.empty() && maxLocalBatchSize--) {
-                values.emplace_back(std::forward<T>(deque_.front()));
+                values.emplace_back(std::move(deque_.front()));
                 deque_.pop_front();
                 result = true;
             }
@@ -133,14 +113,14 @@ public:
 
     /**
      * 窃取节点，从尾部进行
-     * @param task
+     * @param value
      * @return
      */
     CBool trySteal(T& value) {
         bool result = false;
         if (!deque_.empty() && mutex_.try_lock()) {
             if (!deque_.empty()) {
-                value = std::forward<T>(deque_.back());    // 从后方窃取
+                value = std::move(deque_.back());    // 从后方窃取
                 deque_.pop_back();
                 result = true;
             }
@@ -154,13 +134,14 @@ public:
     /**
      * 批量窃取节点，从尾部进行
      * @param values
+     * @param maxStealBatchSize
      * @return
      */
     CBool trySteal(std::vector<T>& values, int maxStealBatchSize) {
         bool result = false;
         if (!deque_.empty() && mutex_.try_lock()) {
             while (!deque_.empty() && maxStealBatchSize--) {
-                values.emplace_back(std::forward<T>(deque_.back()));
+                values.emplace_back(std::move(deque_.back()));
                 deque_.pop_back();
                 result = true;
             }
@@ -170,12 +151,21 @@ public:
         return result;    // 如果非空，表示盗取成功
     }
 
+
+    /**
+     * 判断当前队列是否为空
+     * @return
+     */
+    CBool isEmpty() const {
+        return deque_.empty();
+    }
+
     UWorkStealingQueue() = default;
 
     CGRAPH_NO_ALLOWED_COPY(UWorkStealingQueue)
 
 private:
-    std::deque<T> deque_;            // 存放任务的双向队列
+    std::deque<T> deque_ {};            // 存放任务的双向队列
 };
 
 CGRAPH_NAMESPACE_END

@@ -15,9 +15,9 @@
 
     #if __cplusplus >= 201703L
 #include <shared_mutex>
-    #else
-#include <mutex>
     #endif
+
+#include <mutex>
 
 #include "../CBasic/CBasicInclude.h"
 #include "UtilsFunction.h"
@@ -35,14 +35,19 @@ CGRAPH_NAMESPACE_BEGIN
 using CGRAPH_LOCK_GUARD = std::lock_guard<std::mutex>;
 using CGRAPH_UNIQUE_LOCK = std::unique_lock<std::mutex>;
 
-#if __cplusplus >= 201703L
+#if __cplusplus >= 201703L && _CGRAPH_GPARAM_RWLOCK_ENABLE_
     using CGRAPH_READ_LOCK = std::shared_lock<std::shared_mutex>;
     using CGRAPH_WRITE_LOCK = std::unique_lock<std::shared_mutex>;
 #else
-    using CGRAPH_READ_LOCK = std::lock_guard<std::recursive_mutex>;    // C++11和14不支持读写锁，使用mutex替代
+    using CGRAPH_READ_LOCK = std::lock_guard<std::recursive_mutex>;    // C++11和14不支持读写锁，使用 recursive_mutex 替代
     using CGRAPH_WRITE_LOCK = std::lock_guard<std::recursive_mutex>;
 #endif
 
+#ifdef CGRAPH_EXPOSE_INTERNALS
+    #define CGRAPH_INTERNAL_ACCESS public
+#else
+    #define CGRAPH_INTERNAL_ACCESS private
+#endif
 
 #define __IS_NULLPTR(t) (unlikely(std::is_pointer<decltype(t)>::value && !(t)))
 
@@ -89,13 +94,13 @@ CVoid __ASSERT_NOT_NULL_THROW_EXCEPTION(T t, Args... args) {
 
 /* 删除资源信息 */
 #define CGRAPH_DELETE_PTR(ptr)                                                  \
-    if (unlikely((ptr) != nullptr)) {                                           \
+    if (likely((ptr) != nullptr)) {                                             \
         delete (ptr);                                                           \
         (ptr) = nullptr;                                                        \
     }                                                                           \
 
 #define CGRAPH_DELETE_PTR_ARRAY(arr)                                            \
-    if (unlikely((arr) != nullptr)) {                                           \
+    if (likely((arr) != nullptr)) {                                             \
         delete[] (arr);                                                         \
         (arr) = nullptr;                                                        \
     }                                                                           \
@@ -141,9 +146,9 @@ inline CVoid CGRAPH_ECHO(const char *cmd, ...) {
 
     static std::mutex echo_mtx;
     std::lock_guard<std::mutex> lock{ echo_mtx };
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+    const auto now = std::chrono::system_clock::now();
+    const auto time = std::chrono::system_clock::to_time_t(now);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
     std::cout << "[" << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S.")    \
     << std::setfill('0') << std::setw(3) << ms << "] ";
 

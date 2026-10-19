@@ -23,8 +23,8 @@ GElement::~GElement() {
 
 
 CVoid GElement::refresh() {
-    this->done_ = false;
-    this->left_depend_.store(dependence_.size(), std::memory_order_release);
+    this->done_.store(false, std::memory_order_relaxed);
+    this->left_depend_.store(dependence_.size(), std::memory_order_relaxed);
 }
 
 
@@ -160,7 +160,7 @@ CStatus GElement::addDependGElements(const GElementPtrSet& elements) {
 
     for (GElementPtr element: elements) {
         CGRAPH_ASSERT_NOT_NULL(element)
-        CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION((element->belong_ != this->belong_),     \
+        CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION((element->belong_ != this->belong_),    \
         element->getName() + " cannot depend because not same belong info")
         if (this == element) {
             continue;
@@ -200,16 +200,12 @@ CStatus GElement::addManagers(GParamManagerPtr paramManager,
     this->setGParamManager(paramManager);
     this->setGEventManager(eventManager);
     this->setGStageManager(stageManager);
-    if (aspect_manager_) {
-        aspect_manager_->setGParamManager(paramManager);
-        aspect_manager_->setGEventManager(eventManager);
-    }
 
     CGRAPH_FUNCTION_END
 }
 
 
-CStatus GElement::doAspect(const internal::GAspectType& aspectType, const CStatus& curStatus) {
+CStatus GElement::doAspect(const internal::GAspectType& aspectType, const CStatus& curStatus) const {
     CGRAPH_FUNCTION_BEGIN
 
     // 如果切面管理类为空，或者未添加切面，直接返回
@@ -222,6 +218,36 @@ CStatus GElement::doAspect(const internal::GAspectType& aspectType, const CStatu
 }
 
 
+#ifdef _CGRAPH_LITE_MODE_ENABLE_
+CStatus GElement::fatProcessor(const CFunctionType& type) {
+    CGRAPH_FUNCTION_BEGIN
+    try {
+        switch (type) {
+            case CFunctionType::RUN: {
+                status = run();
+                CGRAPH_FUNCTION_CHECK_STATUS
+                break;
+            }
+            case CFunctionType::INIT: {
+                status = init();
+                CGRAPH_FUNCTION_CHECK_STATUS
+                break;
+            }
+            case CFunctionType::DESTROY: {
+                status = destroy();
+                CGRAPH_FUNCTION_CHECK_STATUS
+                break;
+            }
+            default:
+                CGRAPH_RETURN_ERROR_STATUS("get function type error")
+        }
+    } catch (const CException& ex) {
+        status = crashed(ex);
+    }
+
+    CGRAPH_FUNCTION_END
+}
+#else
 CStatus GElement::fatProcessor(const CFunctionType& type) {
     CGRAPH_FUNCTION_BEGIN
 
@@ -250,44 +276,44 @@ CStatus GElement::fatProcessor(const CFunctionType& type) {
                     do {
                         status += isAsync() ? asyncRun() : run();
                         /**
-                         * 在实际run结束之后，首先需要判断一下是否进入yield状态了。
+                         * 在实际run结束之后，首先需要判断一下是否进入suspend状态了。
                          * 接下来，如果状态是ok的，并且被条件hold住，则循环执行
                          * 默认所有element的isHold条件均为false，即不hold，即执行一次
                          * 可以根据需求，对任意element类型，添加特定的isHold条件
                          * */
-                    } while (checkYield(), this->isHold() && status.isOK());
-                    doAspect(internal::GAspectType::FINISH_RUN, status);
+                    } while (checkSuspend(), isHold() && status.isOK());
+                    (void)doAspect(internal::GAspectType::FINISH_RUN, status);
                 }
 
                 CGRAPH_THROW_EXCEPTION_BY_STATUS(checkRunResult())
                 break;
             }
             case CFunctionType::INIT: {
-                concerned_params_.clear();    // 仅需要记录这一轮使用到的 GParam 信息
                 is_prepared_ = false;
                 status = doAspect(internal::GAspectType::BEGIN_INIT);
                 CGRAPH_FUNCTION_CHECK_STATUS
                 status = init();
-                doAspect(internal::GAspectType::FINISH_INIT, status);
+                (void)doAspect(internal::GAspectType::FINISH_INIT, status);
                 break;
             }
             case CFunctionType::DESTROY: {
                 status = doAspect(internal::GAspectType::BEGIN_DESTROY);
                 CGRAPH_FUNCTION_CHECK_STATUS
                 status = destroy();
-                doAspect(internal::GAspectType::FINISH_DESTROY, status);
+                (void)doAspect(internal::GAspectType::FINISH_DESTROY, status);
                 break;
             }
             default:
                 CGRAPH_RETURN_ERROR_STATUS("get function type error")
         }
     } catch (const CException& ex) {
-        doAspect(internal::GAspectType::ENTER_CRASHED);
+        (void)doAspect(internal::GAspectType::ENTER_CRASHED);
         status = crashed(ex);
     }
 
     CGRAPH_FUNCTION_END
 }
+#endif
 
 
 CStatus GElement::prepareRun() {
@@ -346,17 +372,17 @@ CBool GElement::isMacro() const {
 }
 
 
-CStatus GElement::crashed(const CException& ex) {
+CStatus GElement::crashed(const CException& ex) const {
     (void)(this);
     return CStatus(internal::STATUS_CRASH, ex.what());
 }
 
 
-CIndex GElement::getThreadIndex() {
+CIndex GElement::getThreadIndex() const {
     CGRAPH_THROW_EXCEPTION_BY_CONDITION((nullptr == thread_pool_),    \
         this->getName() + " getThreadIndex with no thread pool")    // 理论不可能出现的情况
 
-    auto tid = (CSize)std::hash<std::thread::id>{}(std::this_thread::get_id());
+    const auto tid = (CSize)std::hash<std::thread::id>{}(std::this_thread::get_id());
     return thread_pool_->getThreadIndex(tid);
 }
 
@@ -365,6 +391,13 @@ GElementPtr GElement::setThreadPool(UThreadPoolPtr ptr) {
     CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(ptr)
     CGRAPH_ASSERT_INIT_THROW_ERROR(false)
     this->thread_pool_ = ptr;
+    setThreadPoolEx(ptr);
+    return this;
+}
+
+
+GElementPtr GElement::setThreadPoolEx(UThreadPoolPtr ptr) {
+    (void)(ptr);
     return this;
 }
 
@@ -410,7 +443,7 @@ CVoid GElement::dumpElement(std::ostream& oss) {
 }
 
 
-CVoid GElement::dumpElementHeader(std::ostream& oss) {
+CVoid GElement::dumpElementHeader(std::ostream& oss) const {
     oss << 'p' << this << "[label=\"";
     if (this->name_.empty()) {
         oss << 'p' << this;    // 如果没有名字，则通过当前指针位置来代替
@@ -420,7 +453,7 @@ CVoid GElement::dumpElementHeader(std::ostream& oss) {
 }
 
 
-CVoid GElement::dumpPerfInfo(std::ostream& oss) {
+CVoid GElement::dumpPerfInfo(std::ostream& oss) const {
     if (perf_info_ && perf_info_->loop_ > 0) {
         // 包含 perf信息的情况
         oss << "\n";
@@ -435,22 +468,26 @@ CVoid GElement::dumpPerfInfo(std::ostream& oss) {
 }
 
 
-CVoid GElement::checkYield() {
-    std::unique_lock<std::mutex> lk(yield_mutex_);
-    this->yield_cv_.wait(lk, [this] {
-        return GElementState::YIELD != cur_state_.load(std::memory_order_acquire);
+CVoid GElement::checkSuspend() {
+    if (GElementState::SUSPEND != cur_state_.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    std::unique_lock<std::mutex> lk(suspend_locker_.mtx_);
+    this->suspend_locker_.cv_.wait(lk, [this] {
+        return GElementState::SUSPEND != cur_state_.load(std::memory_order_acquire);
     });
 }
 
 
 CBool GElement::isGGroup() const {
     // 按位与 GROUP有值，表示是 GROUP的逻辑
-    return (long(element_type_) & long(GElementType::GROUP)) > 0;
+    return (static_cast<long>(element_type_) & static_cast<long>(GElementType::GROUP)) > 0;
 }
 
 
 CBool GElement::isGAdaptor() const {
-    return (long(element_type_) & long(GElementType::ADAPTER)) > 0;
+    return (static_cast<long>(element_type_) & static_cast<long>(GElementType::ADAPTER)) > 0;
 }
 
 
@@ -469,18 +506,13 @@ GElementState GElement::getCurState() const {
 }
 
 
-CIndex GElement::getBindingIndex() const {
-    return this->binding_index_;
+CSize GElement::getLoop() const {
+    return loop_;
 }
 
 
-GElementRelation GElement::getRelation() const {
-    GElementRelation relation;
-    relation.predecessors_ = this->dependence_.asVector();    // 前驱
-    relation.successors_ = this->run_before_.asVector();    // 后继
-    relation.belong_ = this->belong_;    // 从属信息
-
-    return relation;
+CIndex GElement::getBindingIndex() const {
+    return this->binding_index_;
 }
 
 
@@ -495,6 +527,17 @@ CStatus GElement::removeDepend(GElementPtr element) {
     element->run_before_.remove(this);
     left_depend_.store(dependence_.size(), std::memory_order_release);
     CGRAPH_FUNCTION_END
+}
+
+
+GElementRelation GElement::getRelation() const {
+    GElementRelation relation;
+    relation.predecessors_ = this->dependence_.asVector();    // 前驱
+    relation.successors_ = this->run_before_.asVector();    // 后继
+    relation.children_ = this->children_;
+    relation.belong_ = this->belong_;    // 从属信息
+
+    return relation;
 }
 
 
@@ -525,13 +568,14 @@ CStatus GElement::asyncRun() {
 
     async_result_ = thread_pool_->commit([this] {
         return run();
-    }, CGRAPH_POOL_TASK_STRATEGY);
+    }, CGRAPH_TRIGGER_ALL_THREAD_STRATEGY);
 
-    auto futStatus = async_result_.wait_for(std::chrono::milliseconds(timeout_));
+    const auto& futStatus = async_result_.wait_for(std::chrono::milliseconds(timeout_));
     if (std::future_status::ready == futStatus) {
         status = getAsyncResult();
     } else {
-        CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION( GElementTimeoutStrategy::AS_ERROR == timeout_strategy_,    \
+        (void)doAspect(internal::GAspectType::ENTER_TIMEOUT);
+        CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(GElementTimeoutStrategy::AS_ERROR == timeout_strategy_,    \
         "[" + name_ + "] running time more than [" + std::to_string(timeout_) + "]ms")
         cur_state_.store(GElementState::TIMEOUT, std::memory_order_release);
     }
@@ -586,14 +630,63 @@ CBool GElement::isDefaultBinding() const {
 }
 
 
-CStatus GElement::__createGParam_4py(GParamPtr param, const std::string& key) {
-    CGRAPH_ASSERT_NOT_NULL(param_manager_)
-    return param_manager_->__create_4py(param, key);
+GElementPtr GElement::updateAspectInfo() {
+    // 在所有 element 初始化之前执行，确保切面的信息ok
+    if (aspect_manager_) {
+        aspect_manager_->setGParamManager(param_manager_);
+        aspect_manager_->setGEventManager(event_manager_);
+        aspect_manager_->setBelong(this);
+    }
+    return this;
 }
 
 
-GParamPtr GElement::__getGParam_4py(const std::string& key) {
-    return param_manager_ ? param_manager_->__get_4py(key) : nullptr;
+GElementPtr GElement::__addGAspect_4expose(GAspectPtr aspect) {
+    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(aspect)
+    if (!aspect_manager_) {
+        aspect_manager_ = CGRAPH_SAFE_MALLOC_COBJECT(GAspectManager)
+    }
+
+    aspect_manager_->add(aspect);
+    return this;
+}
+
+
+CStatus GElement::__waitGStage_4expose(const std::string& key) {
+    return waitGStage(key);
+}
+
+
+CBool GElement::__isTimeout_4expose() {
+    return isTimeout();
+}
+
+
+std::string GElement::__str_4expose() {
+    // python 中 print 展示的格式
+    std::string info = "<name=" + this->getName() +
+                       ", session=" + this->getSession() + ", loop=" + std::to_string(this->getLoop());
+    const auto& relation = this->getRelation();
+    if (relation.belong_) {
+        info += ", belong=" + relation.belong_->getName();
+    }
+
+    auto toStr = [](const GElementPtrArr& arr, const std::string& key, std::string& result){
+        if (!arr.empty()) {
+            result += ", " + key + "=[";
+            for (CSize i = 0; i < arr.size() - 1; i++) {
+                result += arr[i]->getName() + ",";
+            }
+            result += arr.back()->getName() + "]";
+        }
+    };
+
+    toStr(relation.successors_, "successors", info);
+    toStr(relation.predecessors_, "predecessors", info);
+    toStr(relation.children_, "children", info);
+
+    info += ">";
+    return info;
 }
 
 CGRAPH_NAMESPACE_END
